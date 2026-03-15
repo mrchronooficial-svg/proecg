@@ -1,0 +1,30 @@
+{
+  "name": "proecg",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "check-types": "npm run check-types --workspaces",
+    "dev:web": "npm run dev --workspace web",
+    "db:push": "npm run db:push --workspace @proecg/db",
+    "db:studio": "npm run db:studio --workspace @proecg/db",
+    "db:generate": "npm run db:generate --workspace @proecg/db",
+    "db:migrate": "npm run db:migrate --workspace @proecg/db"
+  },
+  "dependencies": {
+    "@proecg/env": "*",
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@proecg/config": "*",
+    "@types/node": "^22.13.14",
+    "typescript": "^5"
+  },
+  "packageManager": "npm@11.6.2"
+}

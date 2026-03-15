@@ -1,0 +1,3 @@
+{
+  "extends": "@proecg/config/tsconfig.base.json"
+}

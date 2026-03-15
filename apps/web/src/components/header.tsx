@@ -20,7 +20,7 @@ export default function Header() {
         {isDashboard && <SidebarTrigger />}
       </div>
       <Link href={isDashboard ? "/dashboard" : "/"} className="flex items-center gap-2 font-bold text-xl text-foreground justify-self-center">
-        <Image src="/logo.png" alt="ProECG" width={28} height={28} className="rounded-lg" />
+        <Image src="/logo.png" alt="ProECG" width={50} height={50} className="rounded-lg" />
         ProECG
       </Link>
       <div className="flex items-center gap-2 justify-self-end">

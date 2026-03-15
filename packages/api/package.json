@@ -11,6 +11,9 @@
   },
   "scripts": {},
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1009.0",
+    "@aws-sdk/s3-request-presigner": "^3.1009.0",
+    "@paralleldrive/cuid2": "^3.3.0",
     "@proecg/auth": "*",
     "@proecg/db": "*",
     "@proecg/env": "*",

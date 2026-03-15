@@ -1,0 +1,29 @@
+enum Plan {
+  MONTHLY
+  SEMI
+  ANNUAL
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PENDING
+  OVERDUE
+  CANCELLED
+  EXPIRED
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      Plan
+  status    SubscriptionStatus @default(PENDING)
+  asaasId   String?            @unique
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([userId])
+  @@map("subscription")
+}

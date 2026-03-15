@@ -11,23 +11,27 @@ export default function Header() {
   ] as const;
 
   return (
-    <div>
-      <div className="flex flex-row items-center justify-between px-2 py-1">
-        <nav className="flex gap-4 text-lg">
-          {links.map(({ to, label }) => {
-            return (
-              <Link key={to} href={to}>
-                {label}
-              </Link>
-            );
-          })}
+    <header className="sticky top-0 z-50 glass-strong h-14 flex items-center justify-between px-4">
+      <div className="flex items-center gap-6">
+        <Link href="/" className="gradient-text font-bold text-xl">
+          ProECG
+        </Link>
+        <nav className="flex gap-4">
+          {links.map(({ to, label }) => (
+            <Link
+              key={to}
+              href={to}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {label}
+            </Link>
+          ))}
         </nav>
-        <div className="flex items-center gap-2">
-          <ModeToggle />
-          <UserMenu />
-        </div>
       </div>
-      <hr />
-    </div>
+      <div className="flex items-center gap-2">
+        <ModeToggle />
+        <UserMenu />
+      </div>
+    </header>
   );
 }

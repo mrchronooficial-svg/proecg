@@ -1,7 +1,9 @@
-import { Button } from "@proecg/ui/components/button";
+import { Button, buttonVariants } from "@proecg/ui/components/button";
 import { Input } from "@proecg/ui/components/input";
 import { Label } from "@proecg/ui/components/label";
+import { cn } from "@proecg/ui/lib/utils";
 import { useForm } from "@tanstack/react-form";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import z from "zod";
@@ -49,7 +51,7 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
   }
 
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
+    <div className="mx-auto w-full max-w-md glass rounded-2xl p-8 shadow-lg">
       <h1 className="mb-6 text-center text-3xl font-bold">Welcome Back</h1>
 
       <form
@@ -117,13 +119,24 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
         </form.Subscribe>
       </form>
 
-      <div className="mt-4 text-center">
+      <div className="mt-2 text-center">
+        <Link
+          href="/esqueci-senha"
+          className={cn(
+            buttonVariants({ variant: "link" }),
+            "text-sm text-muted-foreground",
+          )}
+        >
+          Esqueci minha senha
+        </Link>
+      </div>
+      <div className="mt-1 text-center">
         <Button
           variant="link"
           onClick={onSwitchToSignUp}
-          className="text-indigo-600 hover:text-indigo-800"
+          className="text-primary hover:text-primary/80"
         >
-          Need an account? Sign Up
+          Não tem conta? Cadastre-se
         </Button>
       </div>
     </div>

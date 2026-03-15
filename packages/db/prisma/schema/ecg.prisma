@@ -1,0 +1,20 @@
+enum AnalysisStatus {
+  UPLOADING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model EcgAnalysis {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  reportJson Json?
+  status     AnalysisStatus @default(UPLOADING)
+  createdAt  DateTime       @default(now())
+  expiresAt  DateTime
+
+  @@index([userId])
+  @@map("ecg_analysis")
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { MenuIcon, XIcon } from "lucide-react";
@@ -17,7 +18,8 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-[#E2E4F0] h-16">
       <div className="mx-auto flex h-full max-w-[1200px] items-center justify-between px-4">
-        <Link href="/" className="text-xl font-bold text-[#122056]">
+        <Link href="/" className="flex items-center gap-2 text-xl font-bold text-[#122056]">
+          <Image src="/logo.png" alt="ProECG" width={32} height={32} className="rounded-lg" />
           ProECG
         </Link>
 

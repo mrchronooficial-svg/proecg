@@ -23,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning className="scroll-smooth">
-      <body className={`${jakarta.variable} antialiased bg-gradient-to-br from-background to-secondary`}>
+      <body className={`${jakarta.variable} antialiased bg-background`}>
         <Providers>
           <div className="grid grid-rows-[auto_1fr] min-h-svh">
             <Header />

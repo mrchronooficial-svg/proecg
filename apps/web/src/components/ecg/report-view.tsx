@@ -23,7 +23,7 @@ export function ReportView({ report, imageUrl }: ReportViewProps) {
       />
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold gradient-text">Medições</h2>
+        <h2 className="mb-3 text-lg font-semibold text-primary">Medições</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <MeasurementCard label="FC" value={m.heartRate} unit={m.heartRateUnit} />
           <MeasurementCard label="Eixo" value={m.axis} unit={m.axisUnit} />
@@ -36,7 +36,7 @@ export function ReportView({ report, imageUrl }: ReportViewProps) {
 
       {report.findings.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold gradient-text">Achados</h2>
+          <h2 className="mb-3 text-lg font-semibold text-primary">Achados</h2>
           <Card className="p-4">
             <ul className="space-y-1 text-sm">
               {report.findings.map((f, i) => (
@@ -49,7 +49,7 @@ export function ReportView({ report, imageUrl }: ReportViewProps) {
 
       {report.diagnoses.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold gradient-text">Hipóteses diagnósticas</h2>
+          <h2 className="mb-3 text-lg font-semibold text-primary">Hipóteses diagnósticas</h2>
           <div className="space-y-3">
             {report.diagnoses.map((d, i) => (
               <Card key={i} className="p-4">

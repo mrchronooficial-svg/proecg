@@ -14,7 +14,7 @@ export default function Dashboard({
 }) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-20 md:pb-8">
-      <div className="mb-8 gradient-brand text-white rounded-2xl p-6 flex items-center justify-between">
+      <div className="mb-8 bg-primary text-primary-foreground rounded-2xl p-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Olá, {session.user.name}</h1>
           <p className="text-sm text-white/80">

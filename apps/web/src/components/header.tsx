@@ -18,7 +18,7 @@ export default function Header() {
       <div className="flex items-center">
         {isDashboard && <SidebarTrigger />}
       </div>
-      <Link href={isDashboard ? "/dashboard" : "/"} className="gradient-text font-bold text-xl text-center justify-self-center">
+      <Link href={isDashboard ? "/dashboard" : "/"} className="font-bold text-xl text-foreground text-center justify-self-center">
         ProECG
       </Link>
       <div className="flex items-center gap-2 justify-self-end">

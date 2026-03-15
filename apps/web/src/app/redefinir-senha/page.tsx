@@ -52,7 +52,7 @@ function ResetForm() {
     return (
       <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
         <Card className="glass shadow-lg max-w-md p-8 text-center">
-          <h1 className="mb-4 text-2xl font-bold gradient-text">Link inválido</h1>
+          <h1 className="mb-4 text-2xl font-bold text-primary">Link inválido</h1>
           <p className="text-muted-foreground">
             Este link de redefinição de senha é inválido ou expirou.
           </p>
@@ -64,7 +64,7 @@ function ResetForm() {
   return (
     <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
       <Card className="glass shadow-lg w-full max-w-md p-8">
-        <h1 className="mb-6 text-center text-2xl font-bold gradient-text">
+        <h1 className="mb-6 text-center text-2xl font-bold text-primary">
           Redefinir senha
         </h1>
         <form

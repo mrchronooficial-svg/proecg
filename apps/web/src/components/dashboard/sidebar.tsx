@@ -83,7 +83,7 @@ export function Sidebar() {
               className={cn(
                 "rounded-lg px-3 py-2 text-sm font-medium transition-all",
                 pathname === link.href
-                  ? "gradient-brand text-white shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "hover:bg-accent/50 text-muted-foreground hover:text-foreground",
               )}
             >

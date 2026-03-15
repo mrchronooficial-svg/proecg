@@ -4,7 +4,7 @@ export default function VerificarEmailPage() {
   return (
     <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
       <Card className="glass shadow-lg max-w-md p-8 text-center">
-        <h1 className="mb-4 text-2xl font-bold gradient-text">Verifique seu email</h1>
+        <h1 className="mb-4 text-2xl font-bold text-primary">Verifique seu email</h1>
         <p className="mb-4 text-muted-foreground">
           Enviamos um link de verificação para o seu email. Clique no link para
           ativar sua conta.

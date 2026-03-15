@@ -50,11 +50,11 @@ export default function AssinarPage() {
           <Card
             key={plan.id}
             className={`relative flex flex-col gap-4 p-6 ${
-              plan.highlight ? "gradient-border shadow-lg" : "glass"
+              plan.highlight ? "border-2 border-primary shadow-lg" : "glass"
             }`}
           >
             {plan.highlight && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full gradient-brand px-3 py-1 text-xs font-semibold text-white">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">
                 {plan.badge}
               </span>
             )}

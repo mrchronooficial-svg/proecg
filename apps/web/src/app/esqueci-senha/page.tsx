@@ -38,7 +38,7 @@ export default function EsqueciSenhaPage() {
     return (
       <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
         <Card className="glass shadow-lg max-w-md p-8 text-center">
-          <h1 className="mb-4 text-2xl font-bold gradient-text">Email enviado</h1>
+          <h1 className="mb-4 text-2xl font-bold text-primary">Email enviado</h1>
           <p className="text-muted-foreground">
             Se o email estiver cadastrado, você receberá um link para redefinir
             sua senha.
@@ -51,7 +51,7 @@ export default function EsqueciSenhaPage() {
   return (
     <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
       <Card className="glass shadow-lg w-full max-w-md p-8">
-        <h1 className="mb-6 text-center text-2xl font-bold gradient-text">Esqueci minha senha</h1>
+        <h1 className="mb-6 text-center text-2xl font-bold text-primary">Esqueci minha senha</h1>
         <form
           onSubmit={(e) => {
             e.preventDefault();

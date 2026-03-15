@@ -13,7 +13,7 @@ import { FooterMarketing } from "@/components/marketing/footer-marketing";
 
 export default function Home() {
   return (
-    <main className="flex flex-col scroll-smooth">
+    <main className="flex flex-col scroll-smooth overflow-x-hidden">
       <Navbar />
       <Hero />
       <SocialProof />

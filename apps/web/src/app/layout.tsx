@@ -11,8 +11,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ProECG",
-  description: "Laudo de ECG em segundos com Inteligência Artificial",
+  title: "ProECG — Laudo de ECG com IA em Segundos",
+  description:
+    "Tire uma foto do ECG de papel e receba um laudo descritivo completo com hipóteses diagnósticas em segundos. Validado por cardiologistas.",
 };
 
 export default function RootLayout({
@@ -21,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning className="scroll-smooth">
       <body className={`${inter.variable} antialiased bg-gradient-to-br from-background to-secondary`}>
         <Providers>
           <div className="grid grid-rows-[auto_1fr] min-h-svh">

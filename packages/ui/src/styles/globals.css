@@ -44,6 +44,17 @@
   --gradient-blue: oklch(0.62 0.15 220);
   --gradient-green-light: oklch(0.92 0.05 155);
   --gradient-blue-light: oklch(0.90 0.04 220);
+
+  /* Landing Page specific */
+  --lp-text: #122056;
+  --lp-accent: #5B65DC;
+  --lp-secondary: #EEEFFD;
+  --lp-bg: #FAFAFD;
+  --lp-accent-hover: #4A51C5;
+  --lp-text-light: #4A5078;
+  --lp-success: #10B981;
+  --lp-warning: #F59E0B;
+  --lp-border: #E2E4F0;
 }
 
 .dark {
@@ -125,6 +136,17 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Landing Page colors */
+  --color-lp-text: var(--lp-text);
+  --color-lp-accent: var(--lp-accent);
+  --color-lp-secondary: var(--lp-secondary);
+  --color-lp-bg: var(--lp-bg);
+  --color-lp-accent-hover: var(--lp-accent-hover);
+  --color-lp-text-light: var(--lp-text-light);
+  --color-lp-success: var(--lp-success);
+  --color-lp-warning: var(--lp-warning);
+  --color-lp-border: var(--lp-border);
 }
 
 @layer base {

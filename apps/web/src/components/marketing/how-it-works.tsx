@@ -1,42 +1,59 @@
-import { Card } from "@proecg/ui/components/card";
+"use client";
+
+import { Reveal } from "./reveal";
 
 const steps = [
   {
-    step: "1",
-    title: "Tire uma foto",
+    num: "01",
+    title: "Fotografe",
     description:
-      "Use a câmera do celular para fotografar o ECG em papel. Funciona com qualquer aparelho de ECG.",
+      "Abra o ProECG no celular e tire uma foto do ECG de papel. Pode ser traçado de 12 derivações, tira de ritmo ou ECG portátil.",
   },
   {
-    step: "2",
-    title: "IA analisa",
+    num: "02",
+    title: "IA Analisa",
     description:
-      "Nosso motor digitaliza o traçado, mede intervalos e classifica padrões em segundos.",
+      "Nossa IA digitaliza o traçado, mede todos os intervalos (FC, PR, QRS, QT, QTc, eixo) e cruza com critérios clínicos validados por cardiologistas.",
   },
   {
-    step: "3",
-    title: "Receba o laudo",
+    num: "03",
+    title: "Receba o Laudo",
     description:
-      "Veja medições (FC, PR, QRS, QT, eixo), achados e hipóteses diagnósticas na tela.",
+      "Em segundos, você recebe o laudo descritivo completo com medições, achados e hipóteses diagnósticas. Exporte em PDF ou envie por WhatsApp.",
   },
 ];
 
 export function HowItWorks() {
   return (
-    <section id="como-funciona" className="px-4 py-16 sm:py-24">
-      <div className="mx-auto max-w-5xl">
-        <h2 className="mb-12 text-center text-3xl font-bold sm:text-4xl">
-          Como funciona
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-3">
-          {steps.map((s) => (
-            <Card key={s.step} className="glass flex flex-col gap-3 p-6 hover:shadow-md transition-shadow">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full gradient-brand text-lg font-bold text-white">
-                {s.step}
+    <section id="como-funciona" className="bg-[#FAFAFD] px-4 py-20 sm:py-24">
+      <div className="mx-auto max-w-[1200px]">
+        <Reveal>
+          <h2 className="text-center text-3xl font-bold text-[#122056] sm:text-4xl">
+            Simples como tirar uma foto
+          </h2>
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mx-auto mt-4 max-w-lg text-center text-lg text-[#4A5078]">
+            Do ECG de papel ao laudo completo em 3 passos.
+          </p>
+        </Reveal>
+
+        <div className="relative mt-14 grid gap-6 sm:grid-cols-3">
+          {/* Connecting line (desktop) */}
+          <div className="absolute top-12 left-[16.67%] right-[16.67%] hidden h-px border-t-2 border-dashed border-[#5B65DC]/30 sm:block" />
+
+          {steps.map((step, i) => (
+            <Reveal key={step.num} delay={i * 0.15}>
+              <div className="relative rounded-2xl border-t-4 border-[#5B65DC] bg-white p-8 shadow-sm">
+                <span className="absolute -top-5 left-6 flex size-10 items-center justify-center rounded-full bg-[#5B65DC] text-sm font-bold text-white shadow">
+                  {step.num}
+                </span>
+                <h3 className="mt-2 text-xl font-semibold text-[#122056]">
+                  {step.title}
+                </h3>
+                <p className="mt-2 text-[#4A5078]">{step.description}</p>
               </div>
-              <h3 className="text-xl font-semibold">{s.title}</h3>
-              <p className="text-muted-foreground">{s.description}</p>
-            </Card>
+            </Reveal>
           ))}
         </div>
       </div>

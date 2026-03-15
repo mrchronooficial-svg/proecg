@@ -52,7 +52,7 @@ export function Hero() {
             <div className="mx-auto mt-12 w-full max-w-[600px] rounded-2xl border border-[#E2E4F0] bg-white p-6 shadow-[0_0_40px_rgba(91,101,220,0.1)] sm:p-8">
               <div className="space-y-3 font-mono text-sm text-[#122056]">
                 <div className="flex items-center gap-2 text-xs text-[#4A5078]">
-                  <div className="h-2 w-2 rounded-full bg-[#10B981]" />
+                  <div className="h-2 w-2 rounded-full bg-[#10B981] animate-pulse" />
                   Laudo gerado em 12 segundos
                 </div>
                 <div className="h-px bg-[#E2E4F0]" />

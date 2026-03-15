@@ -5,19 +5,19 @@ import { Reveal } from "./reveal";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-[#FAFAFD] px-4 pt-20 pb-16 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-24">
+    <section className="relative overflow-hidden bg-[#FAFAFD] px-5 pt-12 pb-10 sm:px-4 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-24">
       <div className="mx-auto max-w-[1200px]">
-        <div className="flex flex-col items-center text-center">
+        <div className="flex flex-col items-start sm:items-center sm:text-center">
           {/* Badge */}
           <Reveal>
-            <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-[#EEEFFD] px-4 py-1.5 text-sm font-medium text-[#5B65DC]">
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-[#EEEFFD] px-4 py-1.5 text-sm font-medium text-[#5B65DC] sm:mb-6">
               Laudo de ECG com IA em segundos
             </span>
           </Reveal>
 
           {/* Headline */}
           <Reveal delay={0.1}>
-            <h1 className="mx-auto max-w-[700px] text-4xl font-extrabold leading-[1.1] text-[#122056] sm:text-5xl lg:text-[56px]">
+            <h1 className="max-w-[700px] text-[32px] font-extrabold leading-[1.15] text-[#122056] sm:mx-auto sm:text-5xl lg:text-[56px]">
               Fotografou o ECG?{" "}
               <span className="text-[#5B65DC]">O laudo já saiu.</span>
             </h1>
@@ -25,7 +25,7 @@ export function Hero() {
 
           {/* Subtitle */}
           <Reveal delay={0.2}>
-            <p className="mx-auto mt-6 max-w-[640px] text-lg text-[#4A5078] sm:text-xl">
+            <p className="mt-5 max-w-[640px] text-[17px] leading-[1.6] text-[#4A5078] sm:mx-auto sm:mt-6 sm:text-xl">
               Tire uma foto do ECG de papel com seu celular e receba um laudo
               descritivo completo com hipóteses diagnósticas — validado por
               cardiologistas, direto no seu bolso.
@@ -34,14 +34,17 @@ export function Hero() {
 
           {/* CTA */}
           <Reveal delay={0.3}>
-            <div className="mt-8 flex flex-col items-center gap-3">
+            <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
               <Link
                 href="/login"
-                className="rounded-xl bg-[#5B65DC] px-10 py-4 text-lg font-semibold text-white shadow-[0_4px_14px_rgba(91,101,220,0.35)] transition-all hover:bg-[#4A51C5] hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(91,101,220,0.4)]"
+                className="rounded-full bg-[#5B65DC] px-8 py-4 text-center text-base font-semibold text-white shadow-[0_4px_14px_rgba(91,101,220,0.35)] transition-all hover:bg-[#4A51C5] hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(91,101,220,0.4)] sm:text-lg"
               >
                 Começar Agora — R$ 197/mês
               </Link>
-              <p className="text-sm text-[#4A5078]">
+              <p className="text-center text-sm text-[#4A5078] sm:hidden">
+                Pix ou cartão · Cancele quando quiser
+              </p>
+              <p className="hidden text-sm text-[#4A5078] sm:block">
                 Pix ou cartão · Cancele quando quiser · Acesso imediato
               </p>
             </div>
@@ -49,7 +52,7 @@ export function Hero() {
 
           {/* Mockup */}
           <Reveal delay={0.4}>
-            <div className="mx-auto mt-12 w-full max-w-[600px] rounded-2xl border border-[#E2E4F0] bg-white p-6 shadow-[0_0_40px_rgba(91,101,220,0.1)] sm:p-8">
+            <div className="mt-10 w-full rounded-2xl border border-[#E2E4F0] bg-white p-5 shadow-[0_0_40px_rgba(91,101,220,0.1)] sm:mx-auto sm:mt-12 sm:max-w-[600px] sm:p-8">
               <div className="space-y-3 font-mono text-sm text-[#122056]">
                 <div className="flex items-center gap-2 text-xs text-[#4A5078]">
                   <span className="relative flex h-2 w-2">

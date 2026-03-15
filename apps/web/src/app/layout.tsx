@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 
 import "../index.css";
 import Header from "@/components/header";
 import Providers from "@/components/providers";
 
-const inter = Inter({
-  variable: "--font-inter",
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
@@ -23,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning className="scroll-smooth">
-      <body className={`${inter.variable} antialiased bg-gradient-to-br from-background to-secondary`}>
+      <body className={`${jakarta.variable} antialiased bg-gradient-to-br from-background to-secondary`}>
         <Providers>
           <div className="grid grid-rows-[auto_1fr] min-h-svh">
             <Header />

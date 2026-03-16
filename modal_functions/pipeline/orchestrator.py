@@ -3,7 +3,7 @@ Orquestrador do pipeline de análise de ECG — ProECG
 
 Ponto de entrada que conecta todas as etapas em ordem:
   1. Baixar imagem do R2 (via URL)
-  2. Digitalizar (ECG-Digitiser) → sinal 12 derivações
+  2. Digitalizar (Open-ECG-Digitizer) → sinal 12 derivações
   3. Medir intervalos → measurements
   4. Aplicar regras clínicas → rule_findings
   5. Classificar CNN → cnn_findings
@@ -31,6 +31,7 @@ import numpy as np
 import requests
 from PIL import Image
 
+from .digitize import digitize_ecg
 from .measure import measure_ecg
 from .rules import apply_clinical_rules
 from .classify import classify_ecg
@@ -49,14 +50,14 @@ def _download_image(image_url: str, timeout: int = 30) -> Image.Image:
 
 
 # ---------------------------------------------------------------------------
-# Etapa 2: Digitalizar (ECG-Digitiser)
+# Etapa 2: Digitalizar (Open-ECG-Digitizer)
 # ---------------------------------------------------------------------------
 
 def _digitize_ecg(image: Image.Image, use_placeholder: bool = False) -> np.ndarray:
     """Converte foto de ECG em papel → sinal digital de 12 derivações.
 
-    Usa ECG-Digitiser (pré-treinado).
-    Retorna array numpy (12, N) com o sinal.
+    Usa Open-ECG-Digitizer (U-Net segmentation) com fallback clássico.
+    Retorna array numpy (12, N) com o sinal a 500 Hz.
 
     Args:
         image: PIL Image do ECG.
@@ -65,20 +66,7 @@ def _digitize_ecg(image: Image.Image, use_placeholder: bool = False) -> np.ndarr
     if use_placeholder:
         return _digitize_ecg_placeholder()
 
-    # TODO: Integrar ECG-Digitiser quando disponível
-    # from ecg_digitiser import digitize
-    # signal = digitize(image)
-    # return signal  # (12, N) numpy array
-    #
-    # Interface esperada:
-    #   - Entrada: PIL Image (foto do ECG de papel)
-    #   - Saída: np.ndarray shape (12, N), onde N = amostras
-    #   - Frequência de amostragem: 500 Hz
-    #   - Ordem: DI, DII, DIII, aVR, aVL, aVF, V1-V6
-    raise NotImplementedError(
-        "ECG-Digitiser ainda não integrado. "
-        "Conectar o modelo pré-treinado em _digitize_ecg()."
-    )
+    return digitize_ecg(image)
 
 
 def _digitize_ecg_placeholder() -> np.ndarray:
@@ -172,7 +160,7 @@ def analyze(image_url: str, use_placeholder: bool = False) -> dict[str, Any]:
     Args:
         image_url: URL da imagem no Cloudflare R2.
         use_placeholder: se True, usa sinal sintético em vez do
-            ECG-Digitiser (para dev/teste).
+            Open-ECG-Digitizer (para dev/teste).
 
     Returns:
         dict no formato do contrato JSON definido em docs/ARQUITETURA.md:

@@ -2,7 +2,7 @@
 Medições automáticas de ECG — ProECG
 
 Recebe sinal digital de 12 derivações (array numpy) proveniente do
-ECG-Digitiser e calcula: FC, eixo, PR, QRS, QT, QTc (Bazett), ritmo.
+Open-ECG-Digitizer e calcula: FC, eixo, PR, QRS, QT, QTc (Bazett), ritmo.
 
 Usa neurokit2 para detecção de ondas P/QRS/T e scipy para cálculos
 auxiliares.
@@ -14,11 +14,11 @@ import numpy as np
 import neurokit2 as nk
 from scipy import signal as scipy_signal
 
-# Ordem padrão das 12 derivações (mesma saída do ECG-Digitiser)
+# Ordem padrão das 12 derivações (mesma saída do Open-ECG-Digitizer)
 LEAD_NAMES = ["DI", "DII", "DIII", "aVR", "aVL", "aVF",
               "V1", "V2", "V3", "V4", "V5", "V6"]
 
-# Frequência de amostragem padrão do ECG-Digitiser (500 Hz)
+# Frequência de amostragem padrão do Open-ECG-Digitizer (500 Hz)
 DEFAULT_FS = 500
 
 

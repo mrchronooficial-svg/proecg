@@ -15,18 +15,29 @@ import modal
 # ---------------------------------------------------------------------------
 
 ecg_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install("git", "git-lfs")
     .pip_install(
         "torch>=2.0,<3",
+        "torchvision>=0.17,<1",
         "numpy>=1.24,<2",
         "scipy>=1.10,<2",
         "neurokit2>=0.2,<1",
         "opencv-python-headless>=4.8,<5",
         "requests>=2.28,<3",
         "Pillow>=9.0,<11",
+        "scikit-image>=0.21,<1",
+        "yacs>=0.1.8,<1",
+        "torch-tps>=1.0,<2",
+        "fastapi[standard]",
     )
-    .copy_local_dir("pipeline", "/root/pipeline")
-    .copy_local_dir("models", "/root/models")
+    .run_commands(
+        "git lfs install",
+        "git clone https://github.com/Ahus-AIM/Open-ECG-Digitizer.git /root/open_ecg_digitizer",
+        "cd /root/open_ecg_digitizer && git lfs pull",
+    )
+    .add_local_dir("pipeline", remote_path="/root/pipeline")
+    .add_local_dir("models", remote_path="/root/models")
 )
 
 app = modal.App("proecg-ecg-analyzer", image=ecg_image)
@@ -41,16 +52,15 @@ model_volume = modal.Volume.from_name("proecg-models", create_if_missing=True)
 # Função principal
 # ---------------------------------------------------------------------------
 
-# TODO: Quando o ECG-Digitiser estiver integrado, mudar use_placeholder=False
-USE_PLACEHOLDER = True  # Sinal sintético enquanto digitiser não está pronto
+USE_PLACEHOLDER = False
 
 
 @app.function(
-    gpu=None,  # CPU é suficiente para o pipeline (CNN pequena)
+    gpu="T4",  # nnU-Net segmentação roda significativamente mais rápido com GPU
     timeout=120,
     memory=2048,
     volumes={"/root/models": model_volume},
-    secrets=[modal.Secret.from_name("proecg-secrets", required=False)],
+    secrets=[modal.Secret.from_name("proecg-secrets")],
 )
 def analyze_ecg(image_url: str) -> dict:
     """Analisa ECG a partir da URL da imagem.
@@ -69,11 +79,11 @@ def analyze_ecg(image_url: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @app.function(
-    gpu=None,
+    gpu="T4",  # nnU-Net segmentação roda significativamente mais rápido com GPU
     timeout=120,
     memory=2048,
     volumes={"/root/models": model_volume},
-    secrets=[modal.Secret.from_name("proecg-secrets", required=False)],
+    secrets=[modal.Secret.from_name("proecg-secrets")],
 )
 @modal.web_endpoint(method="POST", docs=True)
 def analyze_endpoint(request: dict) -> dict:

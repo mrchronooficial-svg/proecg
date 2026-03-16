@@ -39,8 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: Quando o ECG-Digitiser estiver integrado, mudar para False
-USE_PLACEHOLDER = True
+USE_PLACEHOLDER = False
 
 
 class AnalyzeRequest(BaseModel):

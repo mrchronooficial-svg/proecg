@@ -11,12 +11,22 @@ import { trpc } from "@/utils/trpc";
 
 type UploadState = "idle" | "preview" | "uploading" | "processing";
 
+const PROCESSING_STEPS = [
+  "Enviando imagem...",
+  "Digitalizando ECG...",
+  "Medindo intervalos...",
+  "Aplicando regras clínicas...",
+  "Classificando com IA...",
+  "Montando laudo...",
+];
+
 export function UploadForm() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
 
   const getUploadUrl = useMutation(trpc.ecg.getUploadUrl.mutationOptions());
   const submitAnalysis = useMutation(
@@ -36,6 +46,7 @@ export function UploadForm() {
 
     try {
       setState("uploading");
+      setStepIndex(0);
 
       const { uploadUrl, analysisId } = await getUploadUrl.mutateAsync();
 
@@ -47,12 +58,22 @@ export function UploadForm() {
 
       setState("processing");
 
+      // Animate through processing steps
+      const interval = setInterval(() => {
+        setStepIndex((prev) => {
+          if (prev < PROCESSING_STEPS.length - 1) return prev + 1;
+          return prev;
+        });
+      }, 2000);
+
       await submitAnalysis.mutateAsync({ analysisId });
 
+      clearInterval(interval);
       toast.success("ECG analisado com sucesso!");
       router.push(`/dashboard/resultado/${analysisId}`);
     } catch (error) {
       setState("preview");
+      setStepIndex(0);
       toast.error(
         error instanceof Error ? error.message : "Erro ao processar ECG",
       );
@@ -63,6 +84,7 @@ export function UploadForm() {
     setState("idle");
     setFile(null);
     setPreview(null);
+    setStepIndex(0);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -97,7 +119,7 @@ export function UploadForm() {
           <img
             src={preview}
             alt="Preview do ECG"
-            className="max-h-80 w-full rounded-md object-contain"
+            className="max-h-80 w-full rounded-xl object-contain"
           />
           <div className="flex gap-3">
             <Button variant="outline" onClick={handleReset}>
@@ -108,19 +130,30 @@ export function UploadForm() {
         </div>
       )}
 
-      {state === "uploading" && (
-        <div className="flex flex-col items-center gap-4 py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Enviando imagem...</p>
-        </div>
-      )}
-
-      {state === "processing" && (
-        <div className="flex flex-col items-center gap-4 py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">
-            Analisando ECG... Isso pode levar alguns segundos.
-          </p>
+      {(state === "uploading" || state === "processing") && (
+        <div className="flex flex-col items-center gap-5 py-8">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <div className="text-center">
+            <p className="font-medium text-foreground">
+              {state === "uploading"
+                ? PROCESSING_STEPS[0]
+                : PROCESSING_STEPS[stepIndex]}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Isso pode levar até 30 segundos
+            </p>
+          </div>
+          {/* Progress dots */}
+          <div className="flex gap-1.5">
+            {PROCESSING_STEPS.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                  i <= stepIndex ? "bg-primary" : "bg-border"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       )}
     </Card>

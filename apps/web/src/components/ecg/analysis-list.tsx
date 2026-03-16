@@ -40,7 +40,7 @@ export function AnalysisList() {
         const report = item.reportJson as unknown as EcgReport | null;
         const summary =
           item.status === "COMPLETED" && report
-            ? `FC: ${report.measurements.heartRate} bpm — ${report.diagnoses[0]?.name ?? "Sem alterações"}`
+            ? `FC: ${report.measurements.heartRate} bpm — ${report.diagnoses[0]?.description ?? "Sem alterações"}`
             : item.status === "PROCESSING"
               ? "Processando..."
               : item.status === "FAILED"

@@ -52,30 +52,83 @@ def _download_image(image_url: str, timeout: int = 30) -> Image.Image:
 # Etapa 2: Digitalizar (ECG-Digitiser)
 # ---------------------------------------------------------------------------
 
-def _digitize_ecg(image: Image.Image) -> np.ndarray:
+def _digitize_ecg(image: Image.Image, use_placeholder: bool = False) -> np.ndarray:
     """Converte foto de ECG em papel → sinal digital de 12 derivações.
 
     Usa ECG-Digitiser (pré-treinado).
     Retorna array numpy (12, N) com o sinal.
 
-    NOTA: Esta função é um wrapper que será conectado ao ECG-Digitiser
-    quando o modelo estiver integrado. Por enquanto, define a interface.
+    Args:
+        image: PIL Image do ECG.
+        use_placeholder: se True, retorna sinal sintético para dev/teste.
     """
+    if use_placeholder:
+        return _digitize_ecg_placeholder()
+
     # TODO: Integrar ECG-Digitiser quando disponível
     # from ecg_digitiser import digitize
     # signal = digitize(image)
     # return signal  # (12, N) numpy array
-
-    # Placeholder: o ECG-Digitiser será integrado aqui.
-    # A interface esperada é:
+    #
+    # Interface esperada:
     #   - Entrada: PIL Image (foto do ECG de papel)
-    #   - Saída: np.ndarray shape (12, N), onde N é o número de amostras
+    #   - Saída: np.ndarray shape (12, N), onde N = amostras
     #   - Frequência de amostragem: 500 Hz
-    #   - Ordem das derivações: DI, DII, DIII, aVR, aVL, aVF, V1-V6
+    #   - Ordem: DI, DII, DIII, aVR, aVL, aVF, V1-V6
     raise NotImplementedError(
         "ECG-Digitiser ainda não integrado. "
         "Conectar o modelo pré-treinado em _digitize_ecg()."
     )
+
+
+def _digitize_ecg_placeholder() -> np.ndarray:
+    """Gera sinal ECG sintético de 12 derivações para dev/teste.
+
+    Simula um ECG sinusal normal a 500 Hz por 10 segundos.
+    NÃO usar em produção — apenas para testar o pipeline.
+    """
+    fs = 500
+    duration = 10  # segundos
+    n_samples = fs * duration
+    t = np.linspace(0, duration, n_samples, endpoint=False)
+
+    # Frequência cardíaca simulada: ~75 bpm (1.25 Hz)
+    hr_hz = 1.25
+
+    signal = np.zeros((12, n_samples), dtype=np.float64)
+
+    for lead_idx in range(12):
+        # Componente QRS (pico estreito)
+        qrs = np.zeros(n_samples)
+        for beat in range(int(duration * hr_hz)):
+            beat_center = int((beat / hr_hz) * fs)
+            if beat_center < n_samples:
+                # Gaussian pulse para simular QRS
+                width = int(0.04 * fs)  # 40ms
+                start = max(0, beat_center - width)
+                end = min(n_samples, beat_center + width)
+                amplitude = 1.0 + 0.3 * (lead_idx % 3)  # variar por derivação
+                for i in range(start, end):
+                    qrs[i] = amplitude * np.exp(-0.5 * ((i - beat_center) / (width / 3)) ** 2)
+
+        # Componente T (onda mais larga após QRS)
+        t_wave = np.zeros(n_samples)
+        for beat in range(int(duration * hr_hz)):
+            beat_center = int((beat / hr_hz) * fs) + int(0.25 * fs)  # 250ms após R
+            if beat_center < n_samples:
+                width = int(0.08 * fs)  # 80ms
+                start = max(0, beat_center - width)
+                end = min(n_samples, beat_center + width)
+                amplitude = 0.3
+                for i in range(start, end):
+                    t_wave[i] = amplitude * np.exp(-0.5 * ((i - beat_center) / (width / 2)) ** 2)
+
+        # Ruído basal
+        noise = 0.02 * np.random.randn(n_samples)
+
+        signal[lead_idx] = qrs + t_wave + noise
+
+    return signal
 
 
 # ---------------------------------------------------------------------------
@@ -113,11 +166,13 @@ def _strip_scores(findings: list[dict]) -> list[dict]:
 # Função principal — ponto de entrada
 # ---------------------------------------------------------------------------
 
-def analyze(image_url: str) -> dict[str, Any]:
+def analyze(image_url: str, use_placeholder: bool = False) -> dict[str, Any]:
     """Pipeline completo de análise de ECG.
 
     Args:
         image_url: URL da imagem no Cloudflare R2.
+        use_placeholder: se True, usa sinal sintético em vez do
+            ECG-Digitiser (para dev/teste).
 
     Returns:
         dict no formato do contrato JSON definido em docs/ARQUITETURA.md:
@@ -138,7 +193,7 @@ def analyze(image_url: str) -> dict[str, Any]:
         image = _download_image(image_url)
 
         # 2. Digitalizar (foto → sinal 12 derivações)
-        signal_12lead = _digitize_ecg(image)
+        signal_12lead = _digitize_ecg(image, use_placeholder=use_placeholder)
 
         # 3. Medir intervalos
         measurements = measure_ecg(signal_12lead, fs=500)

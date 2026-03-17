@@ -147,15 +147,28 @@ const MOCK_REPORT: EcgReport = {
 // Main function — call Modal endpoint
 // ---------------------------------------------------------------------------
 
-export async function analyzeEcg(imageUrl: string): Promise<EcgReport> {
+export interface CropCorners {
+  top_left: [number, number];
+  top_right: [number, number];
+  bottom_right: [number, number];
+  bottom_left: [number, number];
+}
+
+export async function analyzeEcg(
+  imageUrl: string,
+  corners?: CropCorners,
+): Promise<EcgReport> {
   if (!env.MODAL_ENDPOINT_URL) {
     console.log("[DEV] MODAL_ENDPOINT_URL not configured — returning mock report");
     return MOCK_REPORT;
   }
 
-  const body: Record<string, string> = { image_url: imageUrl };
+  const body: Record<string, unknown> = { image_url: imageUrl };
   if (env.MODAL_TOKEN) {
     body.token = env.MODAL_TOKEN;
+  }
+  if (corners) {
+    body.corners = corners;
   }
 
   const res = await fetch(env.MODAL_ENDPOINT_URL, {

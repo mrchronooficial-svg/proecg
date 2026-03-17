@@ -35,7 +35,15 @@ export const ecgRouter = router({
   }),
 
   submitAnalysis: protectedProcedure
-    .input(z.object({ analysisId: z.string() }))
+    .input(z.object({
+      analysisId: z.string(),
+      corners: z.object({
+        top_left: z.tuple([z.number(), z.number()]),
+        top_right: z.tuple([z.number(), z.number()]),
+        bottom_right: z.tuple([z.number(), z.number()]),
+        bottom_left: z.tuple([z.number(), z.number()]),
+      }).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const analysis = await prisma.ecgAnalysis.findUnique({
         where: { id: input.analysisId },
@@ -54,7 +62,7 @@ export const ecgRouter = router({
       });
 
       try {
-        const report = await analyzeEcg(analysis.imageUrl);
+        const report = await analyzeEcg(analysis.imageUrl, input.corners);
 
         await prisma.ecgAnalysis.update({
           where: { id: input.analysisId },

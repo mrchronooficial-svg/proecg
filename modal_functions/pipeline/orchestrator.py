@@ -24,12 +24,17 @@ Contrato JSON de resposta:
 from __future__ import annotations
 
 import io
+import json
+import logging
+import math
 import time
 from typing import Any
 
 import numpy as np
 import requests
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 from .digitize import digitize_ecg
 from .measure import measure_ecg
@@ -150,35 +155,109 @@ def _strip_scores(findings: list[dict]) -> list[dict]:
     ]
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """Converte tipos numpy para tipos nativos Python (JSON-safe).
+
+    numpy.float64, numpy.int64, numpy.bool_ etc não são serializáveis
+    por json.dumps/FastAPI. NaN e Inf viram None.
+    """
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        val = float(obj)
+        if math.isnan(val) or math.isinf(val):
+            return None
+        return val
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
+
 # ---------------------------------------------------------------------------
 # Função principal — ponto de entrada
 # ---------------------------------------------------------------------------
 
-def analyze(image_url: str, use_placeholder: bool = False) -> dict[str, Any]:
+def _apply_perspective_crop(image: Image.Image, corners: dict) -> Image.Image:
+    """Aplica correção de perspectiva e crop baseado nos 4 cantos do usuário.
+
+    Args:
+        image: PIL Image original
+        corners: dict com keys "top_left", "top_right", "bottom_right", "bottom_left"
+                 Cada valor é [x, y] em pixels da imagem original
+
+    Returns:
+        PIL Image corrigida e cropada (retangular)
+    """
+    import cv2
+    img_np = np.array(image)
+
+    src_pts = np.float32([
+        corners["top_left"],
+        corners["top_right"],
+        corners["bottom_right"],
+        corners["bottom_left"],
+    ])
+
+    width_top = np.linalg.norm(src_pts[1] - src_pts[0])
+    width_bottom = np.linalg.norm(src_pts[2] - src_pts[3])
+    dst_width = int(max(width_top, width_bottom))
+
+    height_left = np.linalg.norm(src_pts[3] - src_pts[0])
+    height_right = np.linalg.norm(src_pts[2] - src_pts[1])
+    dst_height = int(max(height_left, height_right))
+
+    if dst_width < 100 or dst_height < 100:
+        logger.warning("Perspective crop: dimensões muito pequenas (%dx%d), ignorando",
+                       dst_width, dst_height)
+        return image
+
+    dst_pts = np.float32([
+        [0, 0],
+        [dst_width - 1, 0],
+        [dst_width - 1, dst_height - 1],
+        [0, dst_height - 1],
+    ])
+
+    M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+    warped = cv2.warpPerspective(img_np, M, (dst_width, dst_height),
+                                  flags=cv2.INTER_LINEAR,
+                                  borderMode=cv2.BORDER_REPLICATE)
+
+    logger.info("Perspective crop: %dx%d → %dx%d", img_np.shape[1], img_np.shape[0],
+                dst_width, dst_height)
+    return Image.fromarray(warped)
+
+
+def analyze(image_url: str, corners: dict | None = None,
+            use_placeholder: bool = False) -> dict[str, Any]:
     """Pipeline completo de análise de ECG.
 
     Args:
         image_url: URL da imagem no Cloudflare R2.
-        use_placeholder: se True, usa sinal sintético em vez do
-            Open-ECG-Digitizer (para dev/teste).
+        corners: dict com 4 cantos do papel ECG (opcional).
+                 Se fornecido, aplica correção de perspectiva antes do pipeline.
+        use_placeholder: se True, usa sinal sintético em vez do pipeline.
 
     Returns:
-        dict no formato do contrato JSON definido em docs/ARQUITETURA.md:
-        {
-            "success": bool,
-            "measurements": { ... },
-            "findings": [ ... ],
-            "diagnoses": [ ... ],
-            "report_text": str,
-            "processing_time_ms": int,
-            "error": str (apenas se success=False)
-        }
+        dict no formato do contrato JSON.
     """
     start_time = time.perf_counter()
 
     try:
         # 1. Baixar imagem
         image = _download_image(image_url)
+
+        # 1b. Aplicar crop de perspectiva se cantos fornecidos
+        if corners is not None:
+            image = _apply_perspective_crop(image, corners)
 
         # 2. Digitalizar (foto → sinal 12 derivações)
         signal_12lead = _digitize_ecg(image, use_placeholder=use_placeholder)
@@ -197,18 +276,21 @@ def analyze(image_url: str, use_placeholder: bool = False) -> dict[str, Any]:
 
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
-        return {
+        response = _sanitize_for_json({
             "success": True,
             "measurements": _build_measurements_response(measurements),
             "findings": _strip_scores(report["findings"]),
             "diagnoses": report["diagnoses"],
             "report_text": report["report_text"],
             "processing_time_ms": elapsed_ms,
-        }
+        })
+
+        logger.info("Pipeline concluído em %dms. Resposta: %s", elapsed_ms, json.dumps(response, ensure_ascii=False))
+        return response
 
     except NotImplementedError as e:
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-        return {
+        response = {
             "success": False,
             "error": str(e),
             "measurements": {},
@@ -217,10 +299,12 @@ def analyze(image_url: str, use_placeholder: bool = False) -> dict[str, Any]:
             "report_text": "",
             "processing_time_ms": elapsed_ms,
         }
+        logger.warning("Pipeline NotImplementedError em %dms: %s. Resposta: %s", elapsed_ms, e, json.dumps(response, ensure_ascii=False))
+        return response
 
     except Exception as e:
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-        return {
+        response = {
             "success": False,
             "error": f"Erro ao processar ECG: {type(e).__name__}: {str(e)}",
             "measurements": {},
@@ -229,3 +313,5 @@ def analyze(image_url: str, use_placeholder: bool = False) -> dict[str, Any]:
             "report_text": "",
             "processing_time_ms": elapsed_ms,
         }
+        logger.error("Pipeline erro em %dms: %s. Resposta: %s", elapsed_ms, e, json.dumps(response, ensure_ascii=False), exc_info=True)
+        return response

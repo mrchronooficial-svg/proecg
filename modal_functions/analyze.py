@@ -35,18 +35,18 @@ ecg_image = (
         "git lfs install",
         "git clone https://github.com/Ahus-AIM/Open-ECG-Digitizer.git /root/open_ecg_digitizer",
         "cd /root/open_ecg_digitizer && git lfs pull",
+        # Patch 1: src/utils.py — ray só é usado para treinamento (EarlyStopper).
+        # Tornar o import condicional para inferência sem ray.
+        "sed -i 's/^from ray.tune import Stopper$/try:\\n    from ray.tune import Stopper\\nexcept ImportError:\\n    Stopper = object/' /root/open_ecg_digitizer/src/utils.py",
+        # Patch 2: src/model/dewarper.py — Dewarper herda de nn.Module mas
+        # não chama super().__init__(), causando '_modules' AttributeError.
+        "sed -i 's/        self.min_peak_distance_factor = min_peak_distance_factor/        super().__init__()\\n        self.min_peak_distance_factor = min_peak_distance_factor/' /root/open_ecg_digitizer/src/model/dewarper.py",
     )
     .add_local_dir("pipeline", remote_path="/root/pipeline")
     .add_local_dir("models", remote_path="/root/models")
 )
 
 app = modal.App("proecg-ecg-analyzer", image=ecg_image)
-
-# ---------------------------------------------------------------------------
-# Volume para os pesos do modelo (persistente entre deploys)
-# ---------------------------------------------------------------------------
-
-model_volume = modal.Volume.from_name("proecg-models", create_if_missing=True)
 
 # ---------------------------------------------------------------------------
 # Função principal
@@ -56,13 +56,12 @@ USE_PLACEHOLDER = False
 
 
 @app.function(
-    gpu="T4",  # nnU-Net segmentação roda significativamente mais rápido com GPU
+    gpu="T4",
     timeout=120,
     memory=2048,
-    volumes={"/root/models": model_volume},
     secrets=[modal.Secret.from_name("proecg-secrets")],
 )
-def analyze_ecg(image_url: str) -> dict:
+def analyze_ecg(image_url: str, corners: dict | None = None) -> dict:
     """Analisa ECG a partir da URL da imagem.
 
     Chamada internamente pelo web endpoint.
@@ -71,7 +70,7 @@ def analyze_ecg(image_url: str) -> dict:
     sys.path.insert(0, "/root")
 
     from pipeline.orchestrator import analyze
-    return analyze(image_url, use_placeholder=USE_PLACEHOLDER)
+    return analyze(image_url, corners=corners, use_placeholder=USE_PLACEHOLDER)
 
 
 # ---------------------------------------------------------------------------
@@ -79,10 +78,9 @@ def analyze_ecg(image_url: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @app.function(
-    gpu="T4",  # nnU-Net segmentação roda significativamente mais rápido com GPU
+    gpu="T4",
     timeout=120,
     memory=2048,
-    volumes={"/root/models": model_volume},
     secrets=[modal.Secret.from_name("proecg-secrets")],
 )
 @modal.web_endpoint(method="POST", docs=True)
@@ -129,8 +127,9 @@ def analyze_endpoint(request: dict) -> dict:
             "processing_time_ms": 0,
         }
 
+    corners = request.get("corners")
     from pipeline.orchestrator import analyze
-    return analyze(image_url, use_placeholder=USE_PLACEHOLDER)
+    return analyze(image_url, corners=corners, use_placeholder=USE_PLACEHOLDER)
 
 
 # ---------------------------------------------------------------------------

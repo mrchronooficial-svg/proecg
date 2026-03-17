@@ -82,87 +82,66 @@ EXPECTED_LENGTH = 5000
 # ---------------------------------------------------------------------------
 
 class ResidualBlock1D(nn.Module):
-    """Bloco residual para sinal 1D."""
+    """Bloco residual para sinal 1D (arquitetura do Colab)."""
 
     def __init__(self, in_channels: int, out_channels: int, stride: int = 1):
         super().__init__()
-        self.conv1 = nn.Conv1d(
-            in_channels, out_channels, kernel_size=7, stride=stride,
-            padding=3, bias=False,
-        )
+        self.conv1 = nn.Conv1d(in_channels, out_channels, 7, stride, 3)
         self.bn1 = nn.BatchNorm1d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv1d(
-            out_channels, out_channels, kernel_size=7, stride=1,
-            padding=3, bias=False,
-        )
+        self.conv2 = nn.Conv1d(out_channels, out_channels, 7, 1, 3)
         self.bn2 = nn.BatchNorm1d(out_channels)
-        self.dropout = nn.Dropout(0.2)
-
-        self.downsample = None
+        self.shortcut = nn.Sequential()
         if stride != 1 or in_channels != out_channels:
-            self.downsample = nn.Sequential(
-                nn.Conv1d(in_channels, out_channels, 1, stride=stride, bias=False),
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, 1, stride),
                 nn.BatchNorm1d(out_channels),
             )
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x
-        out = self.relu(self.bn1(self.conv1(x)))
+        out = torch.nn.functional.relu(self.bn1(self.conv1(x)))
         out = self.dropout(out)
         out = self.bn2(self.conv2(out))
-        if self.downsample is not None:
-            identity = self.downsample(x)
-        out += identity
-        return self.relu(out)
+        out += self.shortcut(x)
+        return torch.nn.functional.relu(out)
 
 
-class ECGResNet1D(nn.Module):
-    """ResNet-1D para classificação de ECG de 12 derivações."""
+class ECGResNet(nn.Module):
+    """ResNet-1D para classificação de ECG de 12 derivações (arquitetura do Colab)."""
 
     def __init__(self, num_leads: int = 12, num_classes: int = NUM_CLASSES):
         super().__init__()
-        self.conv1 = nn.Conv1d(num_leads, 64, kernel_size=15, stride=2, padding=7, bias=False)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)
-
-        self.layer1 = self._make_layer(64, 64, blocks=2, stride=1)
-        self.layer2 = self._make_layer(64, 128, blocks=2, stride=2)
-        self.layer3 = self._make_layer(128, 256, blocks=2, stride=2)
-        self.layer4 = self._make_layer(256, 512, blocks=2, stride=2)
-
-        self.avgpool = nn.AdaptiveAvgPool1d(1)
+        self.conv_in = nn.Sequential(
+            nn.Conv1d(num_leads, 32, 15, 1, 7),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+        )
+        self.layer1 = ResidualBlock1D(32, 64, stride=2)
+        self.layer2 = ResidualBlock1D(64, 128, stride=2)
+        self.layer3 = ResidualBlock1D(128, 256, stride=2)
+        self.layer4 = ResidualBlock1D(256, 512, stride=2)
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+        self.dropout = nn.Dropout(0.5)
         self.fc = nn.Linear(512, num_classes)
 
-    @staticmethod
-    def _make_layer(
-        in_channels: int, out_channels: int, blocks: int, stride: int,
-    ) -> nn.Sequential:
-        layers = [ResidualBlock1D(in_channels, out_channels, stride)]
-        for _ in range(1, blocks):
-            layers.append(ResidualBlock1D(out_channels, out_channels))
-        return nn.Sequential(*layers)
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.maxpool(self.relu(self.bn1(self.conv1(x))))
+        x = self.conv_in(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        return self.fc(x)
+        return self.fc(self.dropout(self.global_pool(x).squeeze(-1)))
 
 
 # ---------------------------------------------------------------------------
 # Cache do modelo (carrega uma vez por container Modal)
 # ---------------------------------------------------------------------------
 
-_model_cache: ECGResNet1D | None = None
+_model_cache: ECGResNet | None = None
 
 
-def _load_model() -> ECGResNet1D:
+def _load_model() -> ECGResNet:
     """Carrega o modelo do disco (ou retorna do cache)."""
     global _model_cache
     if _model_cache is not None:
@@ -176,7 +155,7 @@ def _load_model() -> ECGResNet1D:
             f"modal_functions/models/classifier/"
         )
 
-    model = ECGResNet1D(num_leads=12, num_classes=NUM_CLASSES)
+    model = ECGResNet(num_leads=12, num_classes=NUM_CLASSES)
     state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
     model.load_state_dict(state_dict)
     model.eval()

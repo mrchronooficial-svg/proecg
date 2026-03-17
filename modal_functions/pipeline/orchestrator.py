@@ -236,15 +236,19 @@ def _apply_perspective_crop(image: Image.Image, corners: dict) -> Image.Image:
     return Image.fromarray(warped)
 
 
-def analyze(image_url: str, corners: dict | None = None,
-            use_placeholder: bool = False) -> dict[str, Any]:
+def analyze(
+    image_url: str,
+    corners: dict | None = None,
+    use_placeholder: bool = False,
+    engine: str = "motor2",
+) -> dict[str, Any]:
     """Pipeline completo de análise de ECG.
 
     Args:
         image_url: URL da imagem no Cloudflare R2.
         corners: dict com 4 cantos do papel ECG (opcional).
-                 Se fornecido, aplica correção de perspectiva antes do pipeline.
-        use_placeholder: se True, usa sinal sintético em vez do pipeline.
+        use_placeholder: se True, usa sinal sintético (Motor 1 only).
+        engine: "motor2" (Claude Vision, default) ou "motor1" (pipeline numérico).
 
     Returns:
         dict no formato do contrato JSON.
@@ -259,47 +263,34 @@ def analyze(image_url: str, corners: dict | None = None,
         if corners is not None:
             image = _apply_perspective_crop(image, corners)
 
-        # 2. Digitalizar (foto → sinal 12 derivações)
-        signal_12lead = _digitize_ecg(image, use_placeholder=use_placeholder)
-
-        # 3. Medir intervalos
-        measurements = measure_ecg(signal_12lead, fs=500)
-
-        # 4. Aplicar regras clínicas
-        rule_findings = apply_clinical_rules(measurements)
-
-        # 5. Classificar CNN
-        cnn_findings = classify_ecg(signal_12lead)
-
-        # 6. Montar laudo
-        report = generate_report(measurements, rule_findings, cnn_findings)
+        # 2. Escolher motor
+        if engine == "motor2":
+            from .motor2 import motor2_analyze
+            result = motor2_analyze(image)
+        else:
+            # Motor 1 — pipeline numérico
+            signal_12lead = _digitize_ecg(image, use_placeholder=use_placeholder)
+            measurements = measure_ecg(signal_12lead, fs=500)
+            rule_findings = apply_clinical_rules(measurements)
+            cnn_findings = classify_ecg(signal_12lead)
+            report = generate_report(measurements, rule_findings, cnn_findings)
+            result = {
+                "success": True,
+                "engine": "motor1",
+                "measurements": _build_measurements_response(measurements),
+                "findings": _strip_scores(report["findings"]),
+                "diagnoses": report["diagnoses"],
+                "report_text": report["report_text"],
+            }
 
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
         response = _sanitize_for_json({
-            "success": True,
-            "measurements": _build_measurements_response(measurements),
-            "findings": _strip_scores(report["findings"]),
-            "diagnoses": report["diagnoses"],
-            "report_text": report["report_text"],
+            **result,
             "processing_time_ms": elapsed_ms,
         })
 
-        logger.info("Pipeline concluído em %dms. Resposta: %s", elapsed_ms, json.dumps(response, ensure_ascii=False))
-        return response
-
-    except NotImplementedError as e:
-        elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-        response = {
-            "success": False,
-            "error": str(e),
-            "measurements": {},
-            "findings": [],
-            "diagnoses": [],
-            "report_text": "",
-            "processing_time_ms": elapsed_ms,
-        }
-        logger.warning("Pipeline NotImplementedError em %dms: %s. Resposta: %s", elapsed_ms, e, json.dumps(response, ensure_ascii=False))
+        logger.info("Pipeline (%s) concluído em %dms", engine, elapsed_ms)
         return response
 
     except Exception as e:
@@ -307,11 +298,12 @@ def analyze(image_url: str, corners: dict | None = None,
         response = {
             "success": False,
             "error": f"Erro ao processar ECG: {type(e).__name__}: {str(e)}",
+            "engine": engine,
             "measurements": {},
             "findings": [],
             "diagnoses": [],
             "report_text": "",
             "processing_time_ms": elapsed_ms,
         }
-        logger.error("Pipeline erro em %dms: %s. Resposta: %s", elapsed_ms, e, json.dumps(response, ensure_ascii=False), exc_info=True)
+        logger.error("Pipeline (%s) erro em %dms: %s", engine, elapsed_ms, e, exc_info=True)
         return response

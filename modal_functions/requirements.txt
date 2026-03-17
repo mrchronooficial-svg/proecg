@@ -14,6 +14,9 @@ scikit-image>=0.21,<1
 yacs>=0.1.8,<1
 torch-tps>=1.0,<2
 
+# Motor 2 — Claude Vision API
+anthropic>=0.40.0
+
 # Dev server (opcional, não precisa em produção)
 fastapi>=0.100
 uvicorn>=0.20

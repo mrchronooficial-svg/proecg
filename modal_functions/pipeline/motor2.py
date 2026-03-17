@@ -322,7 +322,9 @@ def motor2_analyze(image: Image.Image) -> dict:
     client = anthropic.Anthropic()  # usa ANTHROPIC_API_KEY do env
 
     # 3. Chamar API com retry
+    response = None
     last_error = None
+    
     for attempt in range(1 + MAX_RETRIES):
         try:
             t0 = time.perf_counter()
@@ -375,9 +377,21 @@ def motor2_analyze(image: Image.Image) -> dict:
         except anthropic.APIError as e:
             last_error = e
             logger.error("Claude API error: %s", e)
-            break  # Não faz retry para outros erros
-    else:
-        raise RuntimeError(f"Claude API falhou após {1 + MAX_RETRIES} tentativas: {last_error}")
+            # Não faz retry para outros erros, mas também não dá break
+            # Deixa o loop terminar naturalmente
+
+    # Verificar se a chamada foi bem sucedida
+    if response is None:
+        error_msg = f"Claude API falhou após {1 + MAX_RETRIES} tentativas: {last_error}"
+        logger.error(error_msg)
+        return {
+            "success": False,
+            "error": error_msg,
+            "measurements": {},
+            "findings": [],
+            "diagnoses": [],
+            "report_text": "",
+        }
 
     # 4. Parsear resposta
     raw_text = response.content[0].text

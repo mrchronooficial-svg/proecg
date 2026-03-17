@@ -23,7 +23,8 @@ const PROCESSING_STEPS = [
 
 export function UploadForm() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -63,7 +64,8 @@ export function UploadForm() {
     setPreview(null);
     setImageDims(null);
     setCorners(null);
-    if (inputRef.current) inputRef.current.value = "";
+    if (cameraRef.current) cameraRef.current.value = "";
+    if (galleryRef.current) galleryRef.current.value = "";
   }
 
   async function handleSubmit() {
@@ -127,24 +129,47 @@ export function UploadForm() {
       <Card className="glass p-6">
         {state === "idle" && (
           <div className="flex flex-col items-center gap-4">
-            <div
-              className="w-full border-2 border-dashed border-primary/30 rounded-xl p-12 hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-4"
-              onClick={() => inputRef.current?.click()}
-            >
+            <div className="w-full border-2 border-dashed border-primary/30 rounded-xl p-8 flex flex-col items-center gap-5">
               <p className="text-center text-muted-foreground">
-                Tire uma foto do ECG em papel ou selecione uma imagem da galeria.
+                Tire uma foto do ECG em papel ou envie uma imagem da galeria.
               </p>
+
+              {/* Input câmera (abre câmera no mobile) */}
               <input
-                ref={inputRef}
+                ref={cameraRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <Button size="lg">
-                Selecionar foto
-              </Button>
+
+              {/* Input galeria (abre seletor de arquivos/galeria) */}
+              <input
+                ref={galleryRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+                <Button
+                  size="lg"
+                  onClick={() => cameraRef.current?.click()}
+                  className="w-full sm:w-auto"
+                >
+                  Tirar foto
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => galleryRef.current?.click()}
+                  className="w-full sm:w-auto"
+                >
+                  Enviar imagem
+                </Button>
+              </div>
             </div>
           </div>
         )}

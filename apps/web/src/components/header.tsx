@@ -12,7 +12,7 @@ export default function Header() {
   const isDashboard = pathname.startsWith("/dashboard");
 
   // LP has its own navbar
-  if (pathname === "/") return null;
+  if (pathname === "/" || pathname === "/v2") return null;
 
   return (
     <header className="sticky top-0 z-50 glass-strong h-14 grid grid-cols-3 items-center px-4">

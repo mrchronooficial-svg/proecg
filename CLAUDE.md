@@ -68,7 +68,7 @@ proecg/
 │   ├── requirements.txt
 │   ├── config.py               # Constantes, paths, limiares
 │   ├── models/                 # Pesos dos modelos treinados
-│   │   ├── digitizer/          # ECG-Digitiser (pré-treinado)
+│   │   ├── digitizer/          # Pesos Dotter + Leader (UNet treinados por nós)
 │   │   └── classifier/         # CNN classificação (.pth)
 │   ├── pipeline/
 │   │   ├── digitize.py         # Foto → sinal digital (12 derivações)
@@ -84,18 +84,21 @@ proecg/
 │       └── test_pipeline.py
 │
 ├── training/                   # Scripts de treino (rodam no Colab, NÃO em produção)
-│   ├── download_data.py        # Baixar PTB-XL + CODE-15%
-│   ├── generate_images.py      # Gerar imagens sintéticas (ECG-Image-Kit)
-│   ├── train_classifier.py     # Treinar CNN
+│   ├── generate_synthetic.py   # Gerar imagens sintéticas de ECG em papel virtual
+│   ├── train_dotter.py         # Treinar UNet Dotter (detecção de grid)
+│   ├── train_leader.py         # Treinar UNet Leader (segmentação de leads)
+│   ├── train_classifier.py     # Treinar CNN de classificação
 │   ├── evaluate.py             # Avaliar acurácia por diagnóstico
 │   └── notebooks/
 │       ├── 01_explorar_dados.ipynb
-│       ├── 02_testar_digitizacao.ipynb
-│       └── 03_treinar_modelo.ipynb
+│       ├── 02_gerar_sinteticos.ipynb
+│       └── 03_treinar_modelos.ipynb
 │
 └── docs/
     ├── REGRAS_CLINICAS.md      # Critérios diagnósticos escritos pelo cardiologista
     ├── DIAGNOSTICOS.md         # Lista dos ~30 diagnósticos e status (ativo/validação)
+    ├── PROECG_MAPA_COMPLETO_DO_PROJETO.md  # Mapa detalhado de todas as etapas
+    ├── ANALISE_PAPER_PMCARDIO.md           # Análise técnica do paper de referência
     ├── ARQUITETURA.md          # Decisões técnicas
     └── API_IA.md               # Contrato da Modal function (request/response)
 ```
@@ -107,7 +110,7 @@ Médico (celular) → Next.js (Vercel)
                       ├── Auth, pagamento, CRUD → Neon (Postgres)
                       ├── Upload foto → Cloudflare R2
                       └── Chama Modal function (serverless, sob demanda)
-                            ├── Digitaliza (ECG-Digitiser, pré-treinado)
+                            ├── Digitaliza (pipeline próprio baseado em PMcardio)
                             ├── Mede (FC, PR, QRS, QT, QTc, eixo)
                             ├── Regras clínicas checam critérios
                             ├── CNN classifica padrões visuais
@@ -146,11 +149,24 @@ Pagamento via Asaas (Pix + cartão). Sem plano gratuito ou trial no MVP.
 
 ## Motor de IA — Como Funciona
 
-### Camada 1: Digitalização (pré-treinado, pronto)
-ECG-Digitiser converte foto → sinal digital de 12 derivações. Não precisa treinar.
+### Camada 1: Digitalização (pipeline próprio inspirado no PMcardio)
+Pipeline de 6 módulos construído do zero, baseado na arquitetura documentada no paper "High Precision ECG Digitization Using AI" (Demolder et al., PMcardio/Powerful Medical):
+
+1. **Pré-processamento:** Crop automático do papel + correção de perspectiva (OpenCV)
+2. **Dotter (UNet):** Detecta interseções do grid milimetrado → máscara de keypoints
+3. **Gridder:** Organiza keypoints em matriz, interpola gaps
+4. **Undistortion:** Corrige distorção do papel quadrado a quadrado (homografia)
+5. **Leader (UNet):** Segmenta traçados dos leads na imagem normalizada → máscara binária
+6. **Extração de sinal:** Converte máscara em 12 arrays de µV × tempo
+
+Ambos os UNets (Dotter e Leader) usam arquitetura UNet + ResBlocks + SiLU, treinados com BCEWithLogitsLoss + ADAM, LR 0.005, 300 epochs, patches 256×256px. Treinados primeiro com dataset sintético (~5.000 imagens) e depois refinados com fotos reais de ECGs brasileiros (~100-200 fotos anotadas).
+
+Padrão brasileiro default: 25mm/s, 10mm/mV, layout 3×4+1 (DII longo), grid 1mm/5mm.
+
+Paper de referência completo analisado em `docs/ANALISE_PAPER_PMCARDIO.md`.
 
 ### Camada 2: Medições (código matemático, sem IA)
-Algoritmos calculam: FC, eixo elétrico, intervalo PR, duração QRS, QT, QTc (Bazett). Código determinístico usando scipy/neurokit2.
+Algoritmos calculam: FC, eixo elétrico, intervalo PR, duração QRS, QT, QTc (Bazett), análise do segmento ST. Código determinístico usando scipy/neurokit2.
 
 ### Camada 3: Classificação (híbrida: CNN + regras)
 
@@ -163,6 +179,11 @@ Algoritmos calculam: FC, eixo elétrico, intervalo PR, duração QRS, QT, QTc (B
 - Modelo ResNet-1D treinado offline no Colab
 - Arquivo .pth salvo em `modal_functions/models/classifier/`
 - Cobre: SCA supra, FA, flutter, TV, hipercalemia, pericardite, etc.
+
+**Grad-CAM (heatmap de explicabilidade):**
+- Para cada diagnóstico positivo: gera mapa de calor mostrando quais trechos do ECG influenciaram a decisão da IA
+- Semelhante ao ECGxplain™ do PMcardio
+- Exibe score de confiança por derivação
 
 **Diagnósticos que não atingirem precisão aceitável ficam ocultos no MVP** (status "em validação" no `docs/DIAGNOSTICOS.md`). O cardiologista define o limiar.
 
@@ -226,7 +247,7 @@ Dados clínicos (idade, sexo, sintomas) serão adicionados na Fase 2 (Motor 2), 
 npm run build && npm run typecheck && npm run lint
 ```
 
-## Links
+## Links e Referências
 
 - Modal: https://modal.com/docs
 - Better Auth: https://www.better-auth.com/docs
@@ -234,10 +255,11 @@ npm run build && npm run typecheck && npm run lint
 - Prisma: https://www.prisma.io/docs
 - Asaas API: https://docs.asaas.com
 - Cloudflare R2: https://developers.cloudflare.com/r2
-- ECG-Digitiser: https://github.com/felixkrones/ECG-Digitiser
-- ECG-Image-Kit: https://github.com/alphanumericslab/ecg-image-kit
 - PTB-XL: https://physionet.org/content/ptb-xl/1.0.3/
 - CODE-15%: https://zenodo.org/records/4916206
+- PM-ECG-ID (benchmark): https://doi.org/10.5281/zenodo.13617673
+- Paper PMcardio digitização: https://doi.org/10.1101/2024.08.31.24312876
+- ECG-Image-Kit (geração sintética): https://github.com/alphanumericslab/ecg-image-kit
 
 ## Roadmap
 

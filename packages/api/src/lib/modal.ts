@@ -18,6 +18,8 @@ export interface EcgMeasurements {
   qtc: number | null;
   qtcUnit: string;
   rhythm: string | null;
+  pWavePresent?: boolean | null;
+  stSegment?: Record<string, { stAmplitudeMv: number | null; stClassification: string }>;
 }
 
 export interface EcgFinding {
@@ -33,11 +35,23 @@ export interface EcgDiagnosis {
   source: string;
 }
 
+export interface EcgMetadata {
+  layout?: string | null;
+  pxPerMm?: number | null;
+  gridShape?: [number, number] | null;
+  leadsActive?: number | null;
+  cnnAvailable?: boolean;
+  dotterAvailable?: boolean;
+}
+
 export interface EcgReport {
   measurements: EcgMeasurements;
   findings: EcgFinding[];
   diagnoses: EcgDiagnosis[];
+  redFlags: EcgFinding[];
   reportText: string;
+  metadata?: EcgMetadata;
+  processingTimeMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -47,6 +61,7 @@ export interface EcgReport {
 interface ModalRawResponse {
   success: boolean;
   error?: string;
+  engine?: string;
   measurements: {
     heart_rate: number | null;
     heart_rate_unit: string;
@@ -61,6 +76,8 @@ interface ModalRawResponse {
     qtc_bazett: number | null;
     qtc_unit: string;
     rhythm: string | null;
+    p_wave_present?: boolean | null;
+    st_segment?: Record<string, { st_amplitude_mv: number | null; st_classification: string }>;
   };
   findings: Array<{
     code: string;
@@ -73,13 +90,41 @@ interface ModalRawResponse {
     description: string;
     source: string;
   }>;
+  red_flags?: Array<{
+    code: string;
+    description: string;
+    source: string;
+    leads_affected?: string[];
+  }>;
   report_text: string;
   processing_time_ms: number;
+  metadata?: {
+    layout?: string | null;
+    px_per_mm?: number | null;
+    grid_shape?: [number, number] | null;
+    leads_active?: number | null;
+    cnn_available?: boolean;
+    dotter_available?: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Transform snake_case → camelCase
 // ---------------------------------------------------------------------------
+
+function transformStSegment(
+  raw?: Record<string, { st_amplitude_mv: number | null; st_classification: string }>,
+): EcgMeasurements["stSegment"] {
+  if (!raw) return undefined;
+  const result: Record<string, { stAmplitudeMv: number | null; stClassification: string }> = {};
+  for (const [lead, val] of Object.entries(raw)) {
+    result[lead] = {
+      stAmplitudeMv: val.st_amplitude_mv,
+      stClassification: val.st_classification,
+    };
+  }
+  return result;
+}
 
 function transformResponse(raw: ModalRawResponse): EcgReport {
   const m = raw.measurements;
@@ -98,10 +143,24 @@ function transformResponse(raw: ModalRawResponse): EcgReport {
       qtc: m.qtc_bazett,
       qtcUnit: m.qtc_unit ?? "ms",
       rhythm: m.rhythm,
+      pWavePresent: m.p_wave_present,
+      stSegment: transformStSegment(m.st_segment),
     },
     findings: raw.findings,
     diagnoses: raw.diagnoses,
+    redFlags: raw.red_flags ?? [],
     reportText: raw.report_text,
+    processingTimeMs: raw.processing_time_ms,
+    metadata: raw.metadata
+      ? {
+          layout: raw.metadata.layout,
+          pxPerMm: raw.metadata.px_per_mm,
+          gridShape: raw.metadata.grid_shape,
+          leadsActive: raw.metadata.leads_active,
+          cnnAvailable: raw.metadata.cnn_available,
+          dotterAvailable: raw.metadata.dotter_available,
+        }
+      : undefined,
   };
 }
 
@@ -139,6 +198,7 @@ const MOCK_REPORT: EcgReport = {
       source: "rules",
     },
   ],
+  redFlags: [],
   reportText:
     "Ritmo: sinusal. FC: 78 bpm. Eixo: +60°.\nPR: 180ms. QRS: 88ms. QT: 380ms. QTc: 420ms (Bazett).\n\nSem alterações significativas ao eletrocardiograma.\n\n⚠️ Ferramenta de apoio à decisão clínica — não substitui avaliação médica. Correlacionar sempre com dados clínicos, exame físico e contexto do paciente.",
 };

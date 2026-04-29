@@ -1,13 +1,10 @@
 """
-ProECG — Digitalizador Proprietário
-Converte foto de ECG em papel → sinal digital de 12 derivações.
+ProECG — Digitalizador Proprietário (PMcardio-style).
 
-Pipeline: M0 (preprocess) → M1 (segment) → M2 (perspective) →
-          M3 (calibrate) → M4 (detect leads) → M5 (extract) → M6 (postprocess)
-
-Se o pipeline UNet falhar, cai para fallback clássico (binarização + morfologia).
+Pipeline em 6 módulos baseado no paper Demolder et al. 2025:
+  Preprocess → Dotter → Gridder → Undistortion → Leader → Extract
 """
 
-from .pipeline import digitize_ecg
+from .ecg_digitizer import ECGDigitizer, digitize_ecg_pmcardio
 
-__all__ = ["digitize_ecg"]
+__all__ = ["ECGDigitizer", "digitize_ecg_pmcardio"]

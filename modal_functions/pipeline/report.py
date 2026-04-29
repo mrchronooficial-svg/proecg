@@ -1,121 +1,183 @@
 """
-Gerador de laudo descritivo — ProECG
+Gerador de laudo descritivo -- ProECG
 
-Recebe medições, achados de regras e achados da CNN e monta um laudo
-descritivo em texto (template fixo, em português).
+Combina medicoes (measure.py), regras clinicas (rules.py) e CNN (classify.py)
+em um laudo de 5 secoes:
+
+  1. DADOS TECNICOS     -- qualidade da digitalizacao
+  2. MEDICOES           -- ritmo, FC, eixo, PR, QRS, QT, QTc
+  3. ACHADOS            -- regras + CNN + analise ST por derivacao
+  4. HIPOTESES          -- red flags primeiro, depois demais
+  5. DISCLAIMER         -- obrigatorio em todo laudo
 
 Linguagem:
   - NUNCA afirmativa ("O paciente TEM infarto")
-  - SEMPRE sugestiva ("Sugestivo de...", "Compatível com...")
-  - SEMPRE com disclaimer
-  - NUNCA mostrar probabilidade/confiança ao médico
+  - SEMPRE sugestiva ("Sugestivo de...", "Compativel com...")
+  - NUNCA mostrar probabilidade/confianca ao medico
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+# ------------------------------------------------------------------
+# Constantes
+# ------------------------------------------------------------------
+
 DISCLAIMER = (
-    "⚠️ Ferramenta de apoio à decisão clínica — não substitui avaliação médica. "
-    "Correlacionar sempre com dados clínicos, exame físico e contexto do paciente."
+    "Ferramenta de apoio a decisao clinica "
+    "-- nao substitui avaliacao medica. "
+    "Correlacionar sempre com dados clinicos, exame fisico e contexto do paciente."
 )
 
-# Mapeamento de ritmo interno → texto do laudo
 RHYTHM_LABELS: dict[str, str] = {
     "sinus": "sinusal",
-    "irregular_sem_p": "irregular, sem ondas P identificáveis",
-    "regular_sem_p": "regular, sem ondas P identificáveis",
+    "irregular_sem_p": "irregular, sem ondas P identificaveis",
+    "regular_sem_p": "regular, sem ondas P identificaveis",
     "indeterminado": "indeterminado",
 }
 
+# Codigos de red-flag (urgencia maxima) -- aparecem primeiro no laudo
+RED_FLAG_CODES = {
+    "sca_supra", "sca_com_supra",
+    "SGARBOSSA_POSITIVE", "SMITH_MODIFIED_SGARBOSSA",
+    "tv_mono", "tv_poli", "torsades",
+    "bav_total",
+    "HYPERKALEMIA_SEVERE",
+    "CARDIAC_TAMPONADE",
+    "BRUGADA_TYPE1",
+    "fa_pre_excitada",
+}
 
-def _format_measurement_line(measurements: dict) -> str:
-    """Formata a linha de medições do laudo."""
-    m = measurements
+# Mapeamento CNN code -> rules code (para deduplicacao)
+CNN_TO_RULE_MAP: dict[str, str] = {
+    "bav1": "AVB_FIRST_DEGREE",
+    "brd": "RBBB",
+    "bre": "LBBB",
+    "sca_supra": "SGARBOSSA_POSITIVE",
+}
+
+# ------------------------------------------------------------------
+# Secao 1 -- Dados tecnicos
+# ------------------------------------------------------------------
+
+def _build_technical_section(measurements: dict) -> str:
+    """Qualidade da digitalizacao e metadados."""
+    lines = ["DADOS TECNICOS:"]
+
+    quality = measurements.get("quality_flags", {})
+    if quality:
+        grid_pts = quality.get("grid_points_detected")
+        px_mm = quality.get("px_per_mm")
+        layout = quality.get("layout")
+        if grid_pts is not None:
+            lines.append(f"  Pontos de grid detectados: {grid_pts}")
+        if px_mm is not None:
+            lines.append(f"  Resolucao: {px_mm:.1f} px/mm")
+        if layout is not None:
+            lines.append(f"  Layout: {layout}")
+    else:
+        lines.append("  Digitalizacao padrao.")
+
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------------
+# Secao 2 -- Medicoes
+# ------------------------------------------------------------------
+
+def _build_measurements_section(m: dict) -> str:
+    """Formata medicoes como texto."""
+    lines = ["MEDICOES:"]
+
+    # Linha 1: ritmo, FC, eixo
     parts: list[str] = []
 
-    # Ritmo
     rhythm_raw = m.get("rhythm", "indeterminado")
     rhythm_label = RHYTHM_LABELS.get(rhythm_raw, rhythm_raw)
     parts.append(f"Ritmo: {rhythm_label}")
 
-    # FC
     hr = m.get("heart_rate")
     if hr is not None:
         parts.append(f"FC: {hr:.0f} bpm")
 
-    # Eixo
     axis = m.get("axis")
     if axis is not None:
-        parts.append(f"Eixo: {axis:+.0f}°")
+        parts.append(f"Eixo: {axis:+.0f} graus")
 
-    line1 = ". ".join(parts) + "."
+    lines.append("  " + ". ".join(parts) + ".")
 
-    # Intervalos
+    # Linha 2: intervalos
     interval_parts: list[str] = []
-    pr = m.get("pr_interval")
-    if pr is not None:
-        interval_parts.append(f"PR: {pr:.0f}ms")
-
-    qrs = m.get("qrs_duration")
-    if qrs is not None:
-        interval_parts.append(f"QRS: {qrs:.0f}ms")
-
-    qt = m.get("qt_interval")
-    if qt is not None:
-        interval_parts.append(f"QT: {qt:.0f}ms")
+    for key, label in [("pr_interval", "PR"), ("qrs_duration", "QRS"),
+                       ("qt_interval", "QT")]:
+        val = m.get(key)
+        if val is not None:
+            interval_parts.append(f"{label}: {val:.0f}ms")
 
     qtc = m.get("qtc_bazett")
     if qtc is not None:
         interval_parts.append(f"QTc: {qtc:.0f}ms (Bazett)")
 
-    line2 = ". ".join(interval_parts) + "." if interval_parts else ""
+    if interval_parts:
+        lines.append("  " + ". ".join(interval_parts) + ".")
 
-    return f"{line1}\n{line2}" if line2 else line1
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------------
+# Secao 3 -- Achados
+# ------------------------------------------------------------------
+
+def _build_st_analysis(measurements: dict) -> list[str]:
+    """Analise ST por derivacao: so inclui se houver supra ou infra."""
+    st_data = measurements.get("st_segment", {})
+    if not st_data:
+        return []
+
+    supra_leads = []
+    infra_leads = []
+    for lead_name, st in st_data.items():
+        cls = st.get("st_classification", "normal")
+        amp = st.get("st_amplitude_mv")
+        if cls == "supra" and amp is not None:
+            supra_leads.append((lead_name, amp))
+        elif cls == "infra" and amp is not None:
+            infra_leads.append((lead_name, amp))
+
+    lines = []
+    if supra_leads:
+        leads_str = ", ".join(f"{l} ({a:+.2f}mV)" for l, a in supra_leads)
+        lines.append(f"  Supradesnivelamento do segmento ST em {leads_str}.")
+    if infra_leads:
+        leads_str = ", ".join(f"{l} ({a:+.2f}mV)" for l, a in infra_leads)
+        lines.append(f"  Infradesnivelamento do segmento ST em {leads_str}.")
+
+    return lines
 
 
 def _merge_findings(
     rule_findings: list[dict],
     cnn_findings: list[dict],
 ) -> list[dict]:
-    """Combina achados de regras e CNN, removendo duplicatas.
-
-    Se a mesma condição aparece em ambas as fontes, prioriza a regra
-    (mais específica) e marca source como "cnn+rules".
-    """
-    # Mapeamento de códigos equivalentes (CNN code → rules code)
-    cnn_to_rule_map: dict[str, str] = {
-        "bav1": "AVB_FIRST_DEGREE",
-        "brd": "RBBB",
-        "bre": "LBBB",
-        "fa": "fa",  # sem equivalente direto em regras
-        "flutter": "flutter",
-        "sca_supra": "SGARBOSSA_POSITIVE",
-        "bav_total": "bav_total",
-        "bav2": "bav2",
-        "tv_mono": "tv_mono",
-        "alteracao_st": "alteracao_st",
-        "hipertrofia": "hipertrofia",
-    }
-
+    """Combina achados de regras e CNN, deduplicando."""
     rule_codes = {f["code"] for f in rule_findings}
     merged: list[dict] = list(rule_findings)
 
     for cnn_f in cnn_findings:
-        cnn_code = cnn_f["code"]
-        mapped_rule_code = cnn_to_rule_map.get(cnn_code)
+        cnn_code = cnn_f.get("code", "")
+        mapped = CNN_TO_RULE_MAP.get(cnn_code)
 
-        # Se a regra já detectou a mesma condição, marcar como cnn+rules
-        if mapped_rule_code and mapped_rule_code in rule_codes:
+        if mapped and mapped in rule_codes:
+            # Marcar como dupla confirmacao
             for f in merged:
-                if f["code"] == mapped_rule_code:
+                if f["code"] == mapped:
                     f["source"] = "cnn+rules"
                     break
         else:
-            # Adicionar achado da CNN (sem duplicar)
             merged.append({
-                "code": cnn_f["code"],
-                "description": cnn_f["description"],
+                "code": cnn_f.get("code", "unknown"),
+                "description": cnn_f.get("description", ""),
                 "source": "cnn",
                 "leads_affected": cnn_f.get("leads_affected", []),
             })
@@ -123,191 +185,182 @@ def _merge_findings(
     return merged
 
 
-def _build_findings_text(findings: list[dict]) -> str:
-    """Formata achados como texto para o laudo."""
-    if not findings:
+def _build_findings_section(
+    findings: list[dict],
+    measurements: dict,
+) -> str:
+    """Formata achados (regras + CNN + ST)."""
+    lines = ["ACHADOS:"]
+
+    if not findings and not measurements.get("st_segment"):
         return ""
 
-    lines: list[str] = []
     for f in findings:
-        desc = f["description"]
+        desc = f.get("description", "")
         leads = f.get("leads_affected", [])
         if leads:
             desc += f" ({', '.join(leads)})"
-        lines.append(f"  • {desc}")
+        lines.append(f"  - {desc}")
 
-    return "Achados:\n" + "\n".join(lines)
+    # ST analysis
+    st_lines = _build_st_analysis(measurements)
+    lines.extend(st_lines)
+
+    if len(lines) == 1:
+        return ""  # so tinha o header, nada a reportar
+
+    return "\n".join(lines)
 
 
-def _build_diagnoses_text(diagnoses: list[dict]) -> str:
-    """Formata diagnósticos como texto para o laudo."""
-    if not diagnoses:
-        return ""
-
-    lines: list[str] = []
-    for d in diagnoses:
-        lines.append(f"  • {d['description']}")
-
-    return "Hipóteses diagnósticas:\n" + "\n".join(lines)
-
+# ------------------------------------------------------------------
+# Secao 4 -- Hipoteses diagnosticas
+# ------------------------------------------------------------------
 
 def _derive_diagnoses(findings: list[dict]) -> list[dict]:
-    """Deriva diagnósticos de alto nível a partir dos achados combinados.
+    """Deriva diagnosticos de alto nivel a partir dos achados.
 
-    Nunca usar linguagem afirmativa — sempre "sugestivo de", "compatível com".
+    Linguagem SEMPRE 'sugestivo de' / 'compativel com'.
     """
     diagnoses: list[dict] = []
     codes = {f["code"] for f in findings}
 
-    # SCA com supra
-    if "sca_supra" in codes or "SGARBOSSA_POSITIVE" in codes or "SMITH_MODIFIED_SGARBOSSA" in codes:
-        source = "cnn+rules" if ("sca_supra" in codes and
-                                  ("SGARBOSSA_POSITIVE" in codes or "SMITH_MODIFIED_SGARBOSSA" in codes)) else "cnn" if "sca_supra" in codes else "rules"
-        diagnoses.append({
-            "code": "sca_com_supra",
-            "description": "Sugestivo de síndrome coronariana aguda com supra de ST",
-            "source": source,
-        })
+    # Mapeamento: finding code -> (diag_code, descricao)
+    diag_map: list[tuple[set[str], str, str]] = [
+        # Red flags
+        ({"sca_supra", "SGARBOSSA_POSITIVE", "SMITH_MODIFIED_SGARBOSSA"},
+         "sca_com_supra",
+         "Sugestivo de sindrome coronariana aguda com supra de ST"),
+        ({"tv_mono"},
+         "tv_mono",
+         "Compativel com taquicardia ventricular monomórfica"),
+        ({"bav_total"},
+         "bav_total",
+         "Sugestivo de bloqueio atrioventricular total (3o grau)"),
+        ({"HYPERKALEMIA_SEVERE"},
+         "hipercalemia_grave",
+         "Padrao sugestivo de hipercalemia grave"),
+        ({"CARDIAC_TAMPONADE"},
+         "tamponamento",
+         "Padrao sugestivo de tamponamento cardiaco"),
+        ({"BRUGADA_TYPE1"},
+         "brugada",
+         "Compativel com padrao de Brugada tipo 1"),
+        # Demais
+        ({"fa"},
+         "fibrilacao_atrial",
+         "Compativel com fibrilacao atrial"),
+        ({"flutter"},
+         "flutter_atrial",
+         "Compativel com flutter atrial"),
+        ({"S1Q3T3"},
+         "embolia_pulmonar",
+         "Padrao S1Q3T3 -- sugestivo de embolia pulmonar, correlacionar com clinica"),
+        ({"PERICARDITIS"},
+         "pericardite",
+         "Sugestivo de pericardite aguda"),
+        ({"HYPERKALEMIA_MODERATE"},
+         "hipercalemia_moderada",
+         "Padrao sugestivo de hipercalemia moderada"),
+        ({"HYPERKALEMIA_MILD"},
+         "hipercalemia_leve",
+         "Padrao sugestivo de hipercalemia leve"),
+        ({"HYPOKALEMIA"},
+         "hipocalemia",
+         "Padrao sugestivo de hipocalemia"),
+        ({"WPW"},
+         "wpw",
+         "Compativel com padrao de Wolf-Parkinson-White"),
+    ]
 
-    # FA
-    if "fa" in codes:
-        diagnoses.append({
-            "code": "fibrilacao_atrial",
-            "description": "Compatível com fibrilação atrial",
-            "source": "cnn",
-        })
-
-    # Flutter
-    if "flutter" in codes:
-        diagnoses.append({
-            "code": "flutter_atrial",
-            "description": "Compatível com flutter atrial",
-            "source": "cnn",
-        })
-
-    # TV monomórfica
-    if "tv_mono" in codes:
-        diagnoses.append({
-            "code": "tv_mono",
-            "description": "Compatível com taquicardia ventricular monomórfica",
-            "source": "cnn",
-        })
-
-    # BAV total
-    if "bav_total" in codes:
-        diagnoses.append({
-            "code": "bav_total",
-            "description": "Sugestivo de bloqueio atrioventricular total (3º grau)",
-            "source": "cnn+rules" if "bav_total" in codes else "cnn",
-        })
-
-    # Brugada
-    if "BRUGADA_TYPE1" in codes:
-        diagnoses.append({
-            "code": "brugada",
-            "description": "Compatível com padrão de Brugada tipo 1",
-            "source": "rules",
-        })
-
-    # EP (S1Q3T3)
-    if "S1Q3T3" in codes:
-        diagnoses.append({
-            "code": "embolia_pulmonar",
-            "description": "Padrão S1Q3T3 — sugestivo de embolia pulmonar, correlacionar com clínica",
-            "source": "rules",
-        })
-
-    # Pericardite
-    if "PERICARDITIS" in codes:
-        diagnoses.append({
-            "code": "pericardite",
-            "description": "Sugestivo de pericardite aguda",
-            "source": "rules",
-        })
-
-    # Tamponamento
-    if "CARDIAC_TAMPONADE" in codes:
-        diagnoses.append({
-            "code": "tamponamento",
-            "description": "Padrão sugestivo de tamponamento cardíaco",
-            "source": "rules",
-        })
-
-    # Hipercalemia
-    for sev in ("HYPERKALEMIA_SEVERE", "HYPERKALEMIA_MODERATE", "HYPERKALEMIA_MILD"):
-        if sev in codes:
-            nivel = {"HYPERKALEMIA_SEVERE": "grave", "HYPERKALEMIA_MODERATE": "moderada", "HYPERKALEMIA_MILD": "leve"}[sev]
+    seen: set[str] = set()
+    for trigger_codes, diag_code, desc in diag_map:
+        if trigger_codes & codes and diag_code not in seen:
             diagnoses.append({
-                "code": "hipercalemia",
-                "description": f"Padrão sugestivo de hipercalemia {nivel}",
+                "code": diag_code,
+                "description": desc,
                 "source": "rules",
             })
-            break
-
-    # Hipocalemia
-    if "HYPOKALEMIA" in codes:
-        diagnoses.append({
-            "code": "hipocalemia",
-            "description": "Padrão sugestivo de hipocalemia",
-            "source": "rules",
-        })
-
-    # WPW
-    if "WPW" in codes:
-        diagnoses.append({
-            "code": "wpw",
-            "description": "Compatível com padrão de Wolf-Parkinson-White",
-            "source": "rules",
-        })
+            seen.add(diag_code)
 
     return diagnoses
 
 
+def _build_diagnoses_section(diagnoses: list[dict]) -> str:
+    """Formata hipoteses com red flags primeiro."""
+    if not diagnoses:
+        return ""
+
+    # Separar red-flags do resto
+    red = [d for d in diagnoses if d["code"] in RED_FLAG_CODES
+           or any(d["code"].startswith(r) for r in
+                  ("sca_", "tv_", "bav_total", "hipercalemia_grave", "tamponamento"))]
+    normal = [d for d in diagnoses if d not in red]
+
+    lines = ["HIPOTESES DIAGNOSTICAS:"]
+
+    for d in red:
+        lines.append(f"  [!] {d['description']}")
+    for d in normal:
+        lines.append(f"  - {d['description']}")
+
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------------
+# Funcao principal
+# ------------------------------------------------------------------
+
 def generate_report(
     measurements: dict,
     rule_findings: list[dict],
-    cnn_findings: list[dict],
+    cnn_findings: list[dict] | None = None,
 ) -> dict:
-    """Gera o laudo descritivo completo.
+    """Gera laudo descritivo completo.
 
     Args:
-        measurements: dict de medições (saída de measure.py).
-        rule_findings: lista de achados das regras clínicas (saída de rules.py).
-        cnn_findings: lista de achados da CNN (saída de classify.py).
+        measurements: dict de medicoes (saida de measure.py).
+        rule_findings: achados das regras clinicas (saida de rules.py).
+        cnn_findings: achados da CNN (saida de classify.py). Opcional.
 
     Returns:
         dict com:
             - findings (list[dict]): achados combinados
-            - diagnoses (list[dict]): diagnósticos derivados
-            - report_text (str): laudo descritivo em texto
+            - diagnoses (list[dict]): hipoteses diagnosticas
+            - report_text (str): laudo descritivo completo
     """
+    if cnn_findings is None:
+        cnn_findings = []
+
     # Combinar achados
     all_findings = _merge_findings(rule_findings, cnn_findings)
 
-    # Derivar diagnósticos
+    # Derivar diagnosticos
     diagnoses = _derive_diagnoses(all_findings)
 
-    # Montar texto do laudo
+    # Montar texto do laudo (5 secoes)
     sections: list[str] = []
 
-    # Seção 1: Medições
-    sections.append(_format_measurement_line(measurements))
+    # 1. Dados tecnicos
+    sections.append(_build_technical_section(measurements))
 
-    # Seção 2: Achados
-    findings_text = _build_findings_text(all_findings)
+    # 2. Medicoes
+    sections.append(_build_measurements_section(measurements))
+
+    # 3. Achados
+    findings_text = _build_findings_section(all_findings, measurements)
     if findings_text:
         sections.append(findings_text)
 
-    # Seção 3: Diagnósticos
-    diagnoses_text = _build_diagnoses_text(diagnoses)
+    # 4. Hipoteses diagnosticas
+    diagnoses_text = _build_diagnoses_section(diagnoses)
     if diagnoses_text:
         sections.append(diagnoses_text)
 
-    # Se nenhum achado nem diagnóstico
+    # Se nenhum achado nem diagnostico
     if not all_findings and not diagnoses:
-        sections.append("Sem alterações significativas ao eletrocardiograma.")
+        sections.append("ECG sem alteracoes significativas.")
 
-    # Disclaimer (sempre)
+    # 5. Disclaimer (sempre)
     sections.append(DISCLAIMER)
 
     report_text = "\n\n".join(sections)
@@ -317,3 +370,108 @@ def generate_report(
         "diagnoses": diagnoses,
         "report_text": report_text,
     }
+
+
+# ------------------------------------------------------------------
+# Testes com cenarios clinicos
+# ------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import textwrap
+
+    def print_report(title: str, result: dict) -> None:
+        print("=" * 60)
+        print(f"  {title}")
+        print("=" * 60)
+        print(result["report_text"])
+        print()
+
+    # ---- Cenario 1: ECG normal ----
+    m_normal = {
+        "heart_rate": 72, "heart_rate_unit": "bpm",
+        "axis": 45, "axis_unit": "graus",
+        "pr_interval": 160, "pr_unit": "ms",
+        "qrs_duration": 88, "qrs_unit": "ms",
+        "qt_interval": 380, "qt_unit": "ms",
+        "qtc_bazett": 420, "qtc_unit": "ms",
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "st_segment": {
+            "DI": {"st_amplitude_mv": 0.02, "st_classification": "normal"},
+            "DII": {"st_amplitude_mv": 0.01, "st_classification": "normal"},
+            "V1": {"st_amplitude_mv": -0.03, "st_classification": "normal"},
+            "V2": {"st_amplitude_mv": 0.05, "st_classification": "normal"},
+        },
+    }
+    r1 = generate_report(m_normal, [], [])
+    print_report("CENARIO 1: ECG NORMAL", r1)
+    assert len(r1["findings"]) == 0
+    assert len(r1["diagnoses"]) == 0
+    assert "sem alteracoes" in r1["report_text"].lower()
+    print("  [OK] Normal: sem achados, sem diagnosticos\n")
+
+    # ---- Cenario 2: BAV 1o + bradicardia ----
+    m_bav = {
+        "heart_rate": 48, "heart_rate_unit": "bpm",
+        "axis": 30, "axis_unit": "graus",
+        "pr_interval": 280, "pr_unit": "ms",
+        "qrs_duration": 92, "qrs_unit": "ms",
+        "qt_interval": 440, "qt_unit": "ms",
+        "qtc_bazett": 395, "qtc_unit": "ms",
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "st_segment": {},
+    }
+    rule_bav = [
+        {"code": "AVB_FIRST_DEGREE",
+         "description": "Bloqueio atrioventricular de 1o grau (PR 280ms)",
+         "source": "rules", "leads_affected": []},
+        {"code": "SEVERE_SINUS_BRADYCARDIA",
+         "description": "Bradicardia sinusal grave (FC 48 bpm)",
+         "source": "rules", "leads_affected": []},
+    ]
+    r2 = generate_report(m_bav, rule_bav, [])
+    print_report("CENARIO 2: BAV 1o + BRADICARDIA", r2)
+    assert len(r2["findings"]) == 2
+    codes2 = [f["code"] for f in r2["findings"]]
+    assert "AVB_FIRST_DEGREE" in codes2
+    assert "SEVERE_SINUS_BRADYCARDIA" in codes2
+    print("  [OK] BAV 1o + bradicardia detectados\n")
+
+    # ---- Cenario 3: Supra ST anterior (SCA) ----
+    m_supra = {
+        "heart_rate": 95, "heart_rate_unit": "bpm",
+        "axis": 60, "axis_unit": "graus",
+        "pr_interval": 150, "pr_unit": "ms",
+        "qrs_duration": 86, "qrs_unit": "ms",
+        "qt_interval": 360, "qt_unit": "ms",
+        "qtc_bazett": 430, "qtc_unit": "ms",
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "st_segment": {
+            "V1": {"st_amplitude_mv": 0.25, "st_classification": "supra"},
+            "V2": {"st_amplitude_mv": 0.35, "st_classification": "supra"},
+            "V3": {"st_amplitude_mv": 0.30, "st_classification": "supra"},
+            "V4": {"st_amplitude_mv": 0.15, "st_classification": "supra"},
+            "DII": {"st_amplitude_mv": -0.08, "st_classification": "infra"},
+            "DIII": {"st_amplitude_mv": -0.10, "st_classification": "infra"},
+            "aVF": {"st_amplitude_mv": -0.07, "st_classification": "infra"},
+        },
+    }
+    # CNN detectou SCA
+    cnn_supra = [
+        {"code": "sca_supra",
+         "description": "Sindrome coronariana aguda com supra de ST em parede anterior",
+         "leads_affected": ["V1", "V2", "V3", "V4"]},
+    ]
+    r3 = generate_report(m_supra, [], cnn_supra)
+    print_report("CENARIO 3: SUPRA ST ANTERIOR (SCA)", r3)
+    assert any(d["code"] == "sca_com_supra" for d in r3["diagnoses"])
+    assert "Supradesnivelamento" in r3["report_text"]
+    assert "Infradesnivelamento" in r3["report_text"]
+    assert "[!]" in r3["report_text"]  # red flag marker
+    print("  [OK] SCA com supra + infra reciproca detectada, red flag marcado\n")
+
+    print("=" * 60)
+    print("  Todos os cenarios passaram!")
+    print("=" * 60)

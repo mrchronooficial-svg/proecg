@@ -58,9 +58,13 @@ __pycache__/
 *.pyc
 
 # Model weights (large binary files)
-modal_functions/models/digitizer/*.pt
+modal_functions/models/digitizer/
 modal_functions/models/classifier/*.pth
 
-# Debug output
-modal_functions/scripts/debug_output/
-modal_functions/scripts/test_output.png
+# Training datasets and checkpoints (offline workflow, not in repo)
+training/
+
+# Debug artifacts da iteração do format detector
+modal_functions/pipeline/digitize/format_debug/
+modal_functions/pipeline/digitize/debug_format.py
+modal_functions/pipeline/digitize/test_format_detector.py

@@ -59,12 +59,13 @@ def _compute_axis(signal_di: np.ndarray, signal_avf: np.ndarray,
         if end <= start:
             continue
 
-        # Amplitude líquida = max - min dentro da janela QRS
+        # Amplitude líquida SIGNED: soma algébrica (positivo + negativo)
+        # para capturar a direção real do vetor QRS.
         qrs_di = signal_di[start:end]
         qrs_avf = signal_avf[start:end]
 
-        amplitudes_di.append(np.max(qrs_di) - np.min(qrs_di))
-        amplitudes_avf.append(np.max(qrs_avf) - np.min(qrs_avf))
+        amplitudes_di.append(float(np.sum(qrs_di)))
+        amplitudes_avf.append(float(np.sum(qrs_avf)))
 
     if not amplitudes_di:
         return None
@@ -72,7 +73,7 @@ def _compute_axis(signal_di: np.ndarray, signal_avf: np.ndarray,
     amp_di = np.mean(amplitudes_di)
     amp_avf = np.mean(amplitudes_avf)
 
-    # Eixo = arctan(aVF / DI) convertido para graus
+    # Eixo = arctan2(aVF, DI) — usa amplitudes signed para quadrante correto
     axis_rad = np.arctan2(amp_avf, amp_di)
     return float(np.degrees(axis_rad))
 
@@ -214,6 +215,88 @@ def _detect_p_wave(ecg_lead_ii: np.ndarray, r_peaks: np.ndarray, fs: int) -> boo
         return True  # na dúvida, assumir presente
 
 
+def _compute_st_segment(
+    signal_12lead: np.ndarray,
+    r_peaks: np.ndarray,
+    fs: int,
+) -> dict[str, dict]:
+    """Mede a amplitude do segmento ST 60-80ms após o ponto J, por derivação.
+
+    O ponto J é estimado como o fim do QRS (~40ms após R-peak em ECG normal).
+    A medição ST é feita 60-80ms após o ponto J (= ~100-120ms após R-peak).
+    Baseline = nível isoelétrico medido antes da onda P (~200ms antes do R).
+
+    Returns:
+        dict[lead_name, {"st_amplitude_mv": float, "st_classification": str}]
+    """
+    result = {}
+
+    # Amostras para cada ponto de referência
+    j_offset = int(0.040 * fs)       # ~40ms após R = ponto J
+    st_start = int(0.060 * fs)       # 60ms após J
+    st_end = int(0.080 * fs)         # 80ms após J
+    baseline_before = int(0.200 * fs)  # 200ms antes do R (segmento TP)
+    baseline_window = int(0.020 * fs)  # janela de 20ms para baseline
+
+    for i, lead_name in enumerate(LEAD_NAMES):
+        if i >= signal_12lead.shape[0]:
+            break
+
+        sig = signal_12lead[i]
+        st_values = []
+        baseline_values = []
+
+        for rpeak in r_peaks:
+            # Ponto J + 60-80ms
+            st_sample_start = rpeak + j_offset + st_start
+            st_sample_end = rpeak + j_offset + st_end
+
+            # Baseline: segmento TP antes da onda P
+            bl_start = rpeak - baseline_before
+            bl_end = bl_start + baseline_window
+
+            if bl_start < 0 or st_sample_end >= len(sig):
+                continue
+
+            st_val = np.mean(sig[st_sample_start:st_sample_end])
+            bl_val = np.mean(sig[bl_start:bl_end])
+
+            st_values.append(st_val - bl_val)
+            baseline_values.append(bl_val)
+
+        if not st_values:
+            result[lead_name] = {
+                "st_amplitude_mv": None,
+                "st_classification": "indeterminado",
+            }
+            continue
+
+        st_amplitude = float(np.median(st_values))
+
+        # Classificar — thresholds variam por tipo de derivação
+        # Derivações precordiais V1-V3: supra significativo ≥ 0.2 mV
+        # Demais derivações: supra significativo ≥ 0.1 mV
+        # Infra significativo: ≥ 0.05 mV em qualquer derivação
+        if lead_name in ("V1", "V2", "V3"):
+            supra_threshold = 0.2
+        else:
+            supra_threshold = 0.1
+
+        if st_amplitude >= supra_threshold:
+            classification = "supra"
+        elif st_amplitude <= -0.05:
+            classification = "infra"
+        else:
+            classification = "normal"
+
+        result[lead_name] = {
+            "st_amplitude_mv": round(st_amplitude, 3),
+            "st_classification": classification,
+        }
+
+    return result
+
+
 def measure_ecg(
     signal_12lead: np.ndarray,
     fs: int = DEFAULT_FS,
@@ -280,6 +363,9 @@ def measure_ecg(
     # Ritmo
     rhythm = _detect_rhythm(r_peaks, p_wave_present, heart_rate, fs)
 
+    # Segmento ST por derivação
+    st_segment = _compute_st_segment(signal_12lead, r_peaks, fs)
+
     return {
         "heart_rate": round(heart_rate, 0) if heart_rate is not None else None,
         "heart_rate_unit": "bpm",
@@ -295,4 +381,89 @@ def measure_ecg(
         "qtc_unit": "ms",
         "rhythm": rhythm,
         "p_wave_present": p_wave_present,
+        "st_segment": st_segment,
     }
+
+
+# ---------------------------------------------------------------------------
+# Teste com sinal ECG sintético
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    print("=== Teste measure_ecg com sinal sintetico ===\n")
+
+    fs = 500
+    duration = 10  # seconds
+    n_samples = fs * duration
+    t = np.arange(n_samples) / fs
+
+    # Gerar ECG sintético simples: ritmo sinusal ~75 bpm
+    # RR = 0.8s → FC = 75 bpm
+    rr_sec = 0.8
+    n_beats = int(duration / rr_sec)
+
+    signal_12lead = np.zeros((12, n_samples), dtype=np.float64)
+
+    for beat in range(n_beats):
+        r_time = beat * rr_sec + 0.1  # offset
+        r_sample = int(r_time * fs)
+
+        if r_sample >= n_samples - int(0.4 * fs):
+            break
+
+        for lead_idx in range(12):
+            # Escala por derivação (DII mais alto, aVR invertido)
+            scale = [0.8, 1.2, 0.6, -0.5, 0.3, 0.7,
+                     0.4, 0.6, 1.0, 1.1, 0.9, 0.7][lead_idx]
+
+            # Onda P (pequena gaussiana ~60ms antes do R)
+            p_center = r_sample - int(0.16 * fs)
+            p_width = int(0.03 * fs)
+            for i in range(max(0, p_center - p_width * 3),
+                           min(n_samples, p_center + p_width * 3)):
+                signal_12lead[lead_idx, i] += (
+                    0.1 * scale * np.exp(-0.5 * ((i - p_center) / p_width) ** 2)
+                )
+
+            # Complexo QRS (gaussiana estreita no R-peak)
+            qrs_width = int(0.015 * fs)
+            for i in range(max(0, r_sample - qrs_width * 3),
+                           min(n_samples, r_sample + qrs_width * 3)):
+                signal_12lead[lead_idx, i] += (
+                    1.0 * scale * np.exp(-0.5 * ((i - r_sample) / qrs_width) ** 2)
+                )
+
+            # Onda T (gaussiana mais larga ~200ms após R)
+            t_center = r_sample + int(0.25 * fs)
+            t_width = int(0.06 * fs)
+            for i in range(max(0, t_center - t_width * 3),
+                           min(n_samples, t_center + t_width * 3)):
+                signal_12lead[lead_idx, i] += (
+                    0.3 * scale * np.exp(-0.5 * ((i - t_center) / t_width) ** 2)
+                )
+
+    # Adicionar ruido de baseline
+    for i in range(12):
+        signal_12lead[i] += np.random.normal(0, 0.01, n_samples)
+
+    print(f"Sinal sintetico: {signal_12lead.shape}, {fs} Hz, {duration}s")
+    print(f"FC esperada: ~{60 / rr_sec:.0f} bpm\n")
+
+    # Rodar medicoes
+    result = measure_ecg(signal_12lead, fs=fs)
+
+    for key, val in result.items():
+        if key == "st_segment":
+            print(f"\n  ST Segment:")
+            for lead, st in val.items():
+                amp = st["st_amplitude_mv"]
+                cls = st["st_classification"]
+                if amp is not None:
+                    print(f"    {lead:5s}: {amp:+.3f} mV ({cls})")
+                else:
+                    print(f"    {lead:5s}: N/A ({cls})")
+        else:
+            unit = result.get(f"{key}_unit", "")
+            if key.endswith("_unit"):
+                continue
+            print(f"  {key:20s}: {val} {unit}")

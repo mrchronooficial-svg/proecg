@@ -26,15 +26,15 @@ logger = logging.getLogger(__name__)
 # Configuração
 # ---------------------------------------------------------------------------
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-opus-4-20250514"  # ATUALIZADO: Opus para maior precisão
 MAX_TOKENS = 4096
 MAX_IMAGE_SIZE = 1500      # px (lado maior)
 JPEG_QUALITY = 85
-API_TIMEOUT = 30            # segundos
+API_TIMEOUT = 60            # segundos (Opus pode demorar mais)
 MAX_RETRIES = 1
 
 # ---------------------------------------------------------------------------
-# Prompt de interpretação (EXATAMENTE da seção 4 do CLAUDE_MOTOR2.md)
+# Prompt de interpretação (ATUALIZADO com correções para erros comuns)
 # ---------------------------------------------------------------------------
 
 ECG_INTERPRETATION_PROMPT = """Você é um cardiologista especialista em eletrocardiografia com 20 anos de experiência em emergência e UTI no Brasil. Analise esta imagem de ECG e retorne EXCLUSIVAMENTE um JSON válido (sem markdown, sem ```json, sem texto antes ou depois).
@@ -48,11 +48,37 @@ ECG_INTERPRETATION_PROMPT = """Você é um cardiologista especialista em eletroc
 4. Formule hipóteses diagnósticas baseadas nos achados
 5. Gere um laudo descritivo seguindo padrão SBC
 
+## ERROS COMUNS A EVITAR (MUITO IMPORTANTE)
+
+### Erro 1: Confundir ritmo sinusal com fibrilação atrial
+- Ritmo SINUSAL: onda P PRESENTE antes de cada QRS, intervalo RR REGULAR, P positiva em DII
+- Fibrilação atrial: AUSÊNCIA de ondas P, linha de base irregular/fibrilatória, RR IRREGULAR
+- SE VOCÊ VÊ ONDAS P CLARAS E RR REGULAR → É SINUSAL, NÃO FA
+
+### Erro 2: Não detectar bloqueio de ramo
+- SEMPRE meça a duração do QRS em TODAS as derivações
+- QRS ≥ 120ms (3 quadradinhos a 25mm/s) = BLOQUEIO DE RAMO, NUNCA diga "ECG normal"
+- BRE: QRS ≥120ms + ausência de Q em DI/V5/V6 + R monofásica alargada em DI/V5/V6 + QS profundo em V1
+- BRD: QRS ≥120ms + rSR' em V1 + S empastada em DI/V6
+- Se QRS largo → OBRIGATÓRIO classificar como BRE ou BRD
+
+### Erro 3: Confundir pré-excitação (WPW) com supra de ST ou IAM
+- WPW/Pré-excitação: PR curto (<120ms) + ONDA DELTA (início empastado/lento do QRS) + QRS alargado
+- FA pré-excitada: RR irregular + QRS largo e BIZARRO + variação da morfologia do QRS + frequência alta
+- A onda delta pode parecer "supra de ST" mas é o INÍCIO do QRS, não o segmento ST
+- Se QRS muito largo + bizarro + irregular → PENSE EM PRÉ-EXCITAÇÃO antes de pensar em IAM
+- FA pré-excitada é EMERGÊNCIA (risco de FV) — identificar corretamente é crítico
+
+### Erro 4: Perder supra de ST verdadeiro
+- Supra de ST: elevação que começa APÓS o QRS (ponto J) e vai até a onda T
+- Procure IMAGEM EM ESPELHO: supra em uma parede + infra na parede oposta = IAM até provar contrário
+- Anterior (V1-V4) ↔ Inferior (DII, DIII, aVF) são paredes opostas
+
 ## Regras Clínicas Obrigatórias
 
 ### Ritmo
-- Sinusal: onda P positiva em DII, negativa em aVR, antes de cada QRS, com intervalo PR constante
-- Fibrilação atrial: ausência de ondas P, intervalo RR irregular, linha de base irregular
+- Sinusal: onda P positiva em DII, negativa em aVR, antes de cada QRS, com intervalo PR constante e RR regular
+- Fibrilação atrial: ausência de ondas P, intervalo RR irregular, linha de base irregular/fibrilatória
 - Flutter atrial: ondas F (dentes de serra) em DII/DIII/aVF, frequência atrial ~300 bpm
 - Se não conseguir determinar o ritmo com certeza: "ritmo indeterminado"
 
@@ -67,7 +93,7 @@ ECG_INTERPRETATION_PROMPT = """Você é um cardiologista especialista em eletroc
 
 ### Intervalos (a 25 mm/s: 1mm = 40ms, 1 quadrado grande = 200ms)
 - PR normal: 120-200 ms. >200ms = BAV 1º grau. <120ms + delta = WPW
-- QRS normal: <120 ms. ≥120ms = bloqueio de ramo
+- QRS normal: <120 ms. ≥120ms = bloqueio de ramo (NUNCA ignore QRS alargado)
 - QT: medir do início do QRS ao fim da T. Corrigir: QTc = QT / √(RR em segundos)
 - QTc normal: <450ms (homem), <470ms (mulher)
 
@@ -76,26 +102,29 @@ ECG_INTERPRETATION_PROMPT = """Você é um cardiologista especialista em eletroc
 - Elevação ≥2mm (0.2mV) em V1-V3, ≥1mm em V4-V6
 - Se presente: identificar parede (anterior V1-V4, lateral V5-V6/DI/aVL, inferior DII/DIII/aVF)
 - Procurar imagem em espelho (infra recíproco)
+- MAS CUIDADO: não confunda onda delta de WPW com supra de ST!
 
-### Supra de ST na presença de BRD ou BRE (MUITO CRÍTICO — errar para o lado da cautela)
-- BRD NÃO mascara supra de ST. Se houver BRD + supra de ST concordante com a deflexão principal do QRS → IAMCSST até provar o contrário. NÃO atribuir o supra apenas a "alterações secundárias ao BRD".
+### Supra de ST na presença de BRD ou BRE (MUITO CRÍTICO)
+- BRD NÃO mascara supra de ST. Se houver BRD + supra de ST concordante → IAMCSST até provar contrário.
 - BRE pode mascarar supra. Aplicar critérios de Sgarbossa/Smith modificados:
   - Supra ≥1mm concordante com QRS = altamente sugestivo de IAM
   - Supra ≥5mm discordante com QRS = sugestivo
   - Razão ST/S > -0.25 em qualquer derivação = sugestivo (critério de Smith)
-- NA DÚVIDA entre "alteração secundária" e "supra real": SEMPRE relatar o supra e sugerir correlação clínica. É preferível um falso positivo (médico investiga e descarta) do que um falso negativo (infarto não detectado).
 
-### REGRA DE OURO DE SENSIBILIDADE
-- Para achados de EMERGÊNCIA (supra de ST, TV, FV, BAV total, hipercalemia grave): ERRAR PARA O LADO DA SENSIBILIDADE. É melhor reportar um achado duvidoso com linguagem de cautela ("Não é possível excluir supra de ST em V2-V4 — correlacionar com clínica") do que omitir um infarto.
-- Para achados de ROTINA (eixo borderline, PR limítrofe): pode ser mais específico e não reportar se duvidoso.
+### Wolf-Parkinson-White (WPW) e Pré-excitação
+- Padrão WPW em ritmo sinusal: PR curto (<120ms) + onda delta + QRS >100ms
+- FA pré-excitada: FA + condução por via acessória = QRS largo, bizarro, irregular, FC alta
+- FA pré-excitada é EMERGÊNCIA — risco de degeneração para FV
+- NÃO confundir com IAM — a "elevação" é a onda delta, não supra de ST
 
 ### Infradesnivelamento de ST
 - Depressão ≥0.5mm (0.05mV) é significativa
 - Pode indicar isquemia, efeito digitálico, ou alteração recíproca
 
-### Bloqueios de Ramo
-- BRD: QRS ≥120ms + rSR' em V1 + S empastada em DI/V6
-- BRE: QRS ≥120ms + ausência de Q em DI/V5/V6 + R monofásica alargada
+### Bloqueios de Ramo (SEMPRE IDENTIFICAR SE QRS ≥120ms)
+- BRD: QRS ≥120ms + rSR' em V1 (orelha de coelho) + S empastada em DI/V6
+- BRE: QRS ≥120ms + ausência de Q em DI/V5/V6 + R monofásica alargada + QS em V1
+- Se QRS ≥120ms e você não classificou como BRE ou BRD → REVISE
 
 ### Sobrecarga
 - SVE: Sokolow (S em V1 + R em V5/V6 ≥35mm), Cornell, ou padrão de strain
@@ -120,7 +149,7 @@ Retorne EXATAMENTE este JSON (sem texto adicional):
   "measurements": {
     "heart_rate": <número inteiro em bpm | null se indeterminado>,
     "heart_rate_unit": "bpm",
-    "rhythm": "<sinusal|fibrilação atrial|flutter atrial|taquicardia ventricular|ritmo indeterminado|outro>",
+    "rhythm": "<sinusal|fibrilação atrial|flutter atrial|taquicardia ventricular|FA pré-excitada|ritmo indeterminado|outro>",
     "rhythm_detail": "<descrição breve do ritmo>",
     "axis": <número inteiro em graus | null>,
     "axis_classification": "<normal|desvio esquerdo|desvio direito|indeterminado>",
@@ -145,7 +174,7 @@ Retorne EXATAMENTE este JSON (sem texto adicional):
     {
       "code": "<código_snake_case>",
       "description": "<Sugestivo de ... | Compatível com ...>",
-      "category": "<isquemia|arritmia|bloqueio|sobrecarga|distúrbio eletrolítico|outro>",
+      "category": "<isquemia|arritmia|bloqueio|sobrecarga|pré-excitação|distúrbio eletrolítico|outro>",
       "urgency": "<rotina|urgente|emergência>"
     }
   ],
@@ -161,13 +190,22 @@ Retorne EXATAMENTE este JSON (sem texto adicional):
 - Se não conseguir avaliar algo: dizer explicitamente (ex: "Derivação V4 parcialmente obstruída, avaliação limitada")
 - SEMPRE terminar com o disclaimer: ⚠️ Ferramenta de apoio à decisão clínica — não substitui avaliação médica.
 
+## CHECKLIST FINAL ANTES DE RESPONDER
+
+Antes de gerar o JSON, verifique:
+1. [ ] O QRS está alargado (≥120ms)? Se sim, classifiquei como BRE ou BRD?
+2. [ ] Há ondas P antes de cada QRS? Se sim, é sinusal. Se não, considerar FA/flutter.
+3. [ ] O RR é regular ou irregular? Irregular sem P = FA.
+4. [ ] Há onda delta (início empastado do QRS)? Se sim, considerar WPW/pré-excitação.
+5. [ ] Se vi "supra de ST", é realmente supra (após QRS) ou é onda delta (início do QRS)?
+6. [ ] Se há supra, há imagem em espelho (infra na parede oposta)?
+
 ## IMPORTANTE
 
 - Analise TODAS as 12 derivações sistematicamente
 - NÃO invente dados — se não conseguir medir algo, retorne null
 - Se a imagem estiver ruim (borrada, cortada, escura), indique no campo quality e nos achados
-- Se a imagem estiver de cabeça para baixo ou rotacionada, corrija mentalmente ANTES de interpretar e indique no campo orientation
-- Quando a qualidade da imagem limitar a análise de uma derivação específica, DIGA EXPLICITAMENTE (ex: "V4 com resolução insuficiente para avaliar ST com segurança — não é possível excluir supra")
+- Se a imagem estiver de cabeça para baixo ou rotacionada, corrija mentalmente ANTES de interpretar
 - Em caso de dúvida sobre achado de emergência: REPORTE com linguagem de cautela, nunca omita
 - O campo report_text deve ser o laudo COMPLETO que o médico vai ler
 - Retorne APENAS o JSON, sem texto antes ou depois, sem blocos de código markdown
@@ -355,7 +393,7 @@ def motor2_analyze(image: Image.Image) -> dict:
             )
 
             elapsed = time.perf_counter() - t0
-            logger.info("Claude API: %.1fs, input=%d tokens, output=%d tokens",
+            logger.info("Claude API (Opus): %.1fs, input=%d tokens, output=%d tokens",
                         elapsed, response.usage.input_tokens, response.usage.output_tokens)
 
             break  # Sucesso
@@ -377,8 +415,7 @@ def motor2_analyze(image: Image.Image) -> dict:
         except anthropic.APIError as e:
             last_error = e
             logger.error("Claude API error: %s", e)
-            # Não faz retry para outros erros, mas também não dá break
-            # Deixa o loop terminar naturalmente
+            # Não faz retry para outros erros
 
     # Verificar se a chamada foi bem sucedida
     if response is None:
@@ -407,6 +444,7 @@ def motor2_analyze(image: Image.Image) -> dict:
     # 6. Metadata
     result["success"] = True
     result["engine"] = "motor2"
+    result["model"] = MODEL
     result["api_tokens"] = {
         "input": response.usage.input_tokens,
         "output": response.usage.output_tokens,

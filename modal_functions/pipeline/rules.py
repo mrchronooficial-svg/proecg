@@ -1,5 +1,5 @@
 """
-Regras clínicas para interpretação de ECG — ProECG
+Regras clínicas para interpretação de ECG -- ProECG
 
 Implementa os critérios definidos em docs/REGRAS_CLINICAS.md.
 Cada regra usa APENAS os limiares documentados pelo cardiologista.
@@ -75,7 +75,7 @@ def _finding(
 # ---------------------------------------------------------------------------
 
 def _check_heart_rate(m: dict) -> list[Finding]:
-    """FC — bradicardia / taquicardia."""
+    """FC -- bradicardia / taquicardia."""
     findings: list[Finding] = []
     hr = m.get("heart_rate")
     if hr is None:
@@ -99,7 +99,7 @@ def _check_heart_rate(m: dict) -> list[Finding]:
 
 
 def _check_axis(m: dict) -> list[Finding]:
-    """Eixo elétrico — normal / desvio esquerdo / desvio direito."""
+    """Eixo elétrico -- normal / desvio esquerdo / desvio direito."""
     findings: list[Finding] = []
     axis = m.get("axis")
     if axis is None:
@@ -120,7 +120,7 @@ def _check_axis(m: dict) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
-# Grupo A — Diagnósticos por Regras
+# Grupo A -- Diagnósticos por Regras
 # ---------------------------------------------------------------------------
 
 def _check_bav_first_degree(m: dict) -> list[Finding]:
@@ -346,7 +346,7 @@ def _check_sgarbossa(m: dict) -> list[Finding]:
     if score >= 3:
         findings.append(_finding(
             "SGARBOSSA_POSITIVE",
-            f"Critérios de Sgarbossa positivos (score {score} pontos) — sugestivo de SCA em contexto de BRE",
+            f"Critérios de Sgarbossa positivos (score {score} pontos) -- sugestivo de SCA em contexto de BRE",
             leads_affected=affected,
         ))
 
@@ -359,7 +359,7 @@ def _check_sgarbossa(m: dict) -> list[Finding]:
             if score < 3:
                 findings.append(_finding(
                     "SMITH_MODIFIED_SGARBOSSA",
-                    f"Critério modificado de Smith positivo (razão ST/S > -0.25 em {lead_name}) — sugestivo de SCA em contexto de BRE",
+                    f"Critério modificado de Smith positivo (razão ST/S > -0.25 em {lead_name}) -- sugestivo de SCA em contexto de BRE",
                     leads_affected=[lead_name],
                 ))
             break  # reportar apenas uma vez
@@ -368,7 +368,7 @@ def _check_sgarbossa(m: dict) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
-# Grupo A/C — Regras que complementam a CNN
+# Grupo A/C -- Regras que complementam a CNN
 # ---------------------------------------------------------------------------
 
 def _check_s1q3t3(m: dict) -> list[Finding]:
@@ -388,7 +388,7 @@ def _check_s1q3t3(m: dict) -> list[Finding]:
     if s_in_di and q_in_diii and t_inv_diii:
         return [_finding(
             "S1Q3T3",
-            "Padrão S1Q3T3 — sugestivo de embolia pulmonar, correlacionar com clínica",
+            "Padrão S1Q3T3 -- sugestivo de embolia pulmonar, correlacionar com clínica",
             leads_affected=["DI", "DIII"],
         )]
     return []
@@ -420,7 +420,7 @@ def _check_brugada_type1(m: dict) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
-# Grupo A/C — Distúrbios eletrolíticos e padrões específicos
+# Grupo A/C -- Distúrbios eletrolíticos e padrões específicos
 # ---------------------------------------------------------------------------
 
 def _check_hyperkalemia(m: dict) -> list[Finding]:
@@ -574,11 +574,13 @@ def _check_cardiac_tamponade(m: dict) -> list[Finding]:
     rhythm = m.get("rhythm", "")
 
     # Baixa voltagem no plano frontal (QRS < 5mm em todas as frontais)
-    frontal_low_voltage = all(
-        abs(_get_lead(leads, name).get("qrs_amplitude", 10)) < 5
+    frontal_amps = [
+        abs(_get_lead(leads, name).get("qrs_amplitude", 10))
         for name in LEAD_FRONTAL
         if _get_lead(leads, name).get("qrs_amplitude") is not None
-    )
+    ]
+    # Precisa de dados em pelo menos 4 derivações frontais para avaliar
+    frontal_low_voltage = len(frontal_amps) >= 4 and all(a < 5 for a in frontal_amps)
 
     # Alternância elétrica
     has_alternans = any(
@@ -646,3 +648,202 @@ def apply_clinical_rules(measurements: dict) -> list[dict]:
     for rule_fn in ALL_RULES:
         findings.extend(rule_fn(measurements))
     return findings
+
+
+# ---------------------------------------------------------------------------
+# Teste com cenários clínicos simulados
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    print("=== Teste apply_clinical_rules ===\n")
+
+    # --- Cenário 1: ECG normal ---
+    normal = {
+        "heart_rate": 72,
+        "axis": 45,
+        "pr_interval": 160,
+        "qrs_duration": 88,
+        "qt_interval": 380,
+        "qtc_bazett": 420,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "M",
+        "leads": {},
+    }
+    print("Cenario 1 -- ECG normal:")
+    findings = apply_clinical_rules(normal)
+    print(f"  Achados: {len(findings)}")
+    for f in findings:
+        print(f"    [{f['code']}] {f['description']}")
+    assert len(findings) == 0, "ECG normal nao deveria gerar achados"
+    print("  OK\n")
+
+    # --- Cenário 2: BAV 1o grau ---
+    bav1 = {
+        "heart_rate": 65,
+        "axis": 30,
+        "pr_interval": 240,
+        "qrs_duration": 90,
+        "qt_interval": 400,
+        "qtc_bazett": 430,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "M",
+        "leads": {},
+    }
+    print("Cenario 2 -- BAV 1o grau (PR=240ms):")
+    findings = apply_clinical_rules(bav1)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "AVB_FIRST_DEGREE" in codes
+    print("  OK\n")
+
+    # --- Cenário 3: Bradicardia sinusal grave ---
+    brady = {
+        "heart_rate": 42,
+        "axis": 60,
+        "pr_interval": 170,
+        "qrs_duration": 86,
+        "qt_interval": 420,
+        "qtc_bazett": 410,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "F",
+        "leads": {},
+    }
+    print("Cenario 3 -- Bradicardia grave (FC=42):")
+    findings = apply_clinical_rules(brady)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "SEVERE_SINUS_BRADYCARDIA" in codes
+    print("  OK\n")
+
+    # --- Cenário 4: QT longo (mulher) ---
+    long_qt = {
+        "heart_rate": 68,
+        "axis": 50,
+        "pr_interval": 160,
+        "qrs_duration": 92,
+        "qt_interval": 490,
+        "qtc_bazett": 490,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "F",
+        "leads": {},
+    }
+    print("Cenario 4 -- QT longo mulher (QTc=490):")
+    findings = apply_clinical_rules(long_qt)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "LONG_QT" in codes
+    print("  OK\n")
+
+    # --- Cenário 5: QT longo limiar (homem 450, mulher 470 -- borda) ---
+    borderline_m = {**long_qt, "sex": "M", "qtc_bazett": 455}
+    print("Cenario 5a -- QTc=455 homem (> 450 -> longo):")
+    findings = apply_clinical_rules(borderline_m)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "LONG_QT" in codes
+    print("  OK")
+
+    borderline_f = {**long_qt, "sex": "F", "qtc_bazett": 465}
+    print("Cenario 5b -- QTc=465 mulher (< 470 -> normal):")
+    findings = apply_clinical_rules(borderline_f)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "LONG_QT" not in codes
+    print("  OK\n")
+
+    # --- Cenário 6: BRD completo ---
+    rbbb = {
+        "heart_rate": 78,
+        "axis": 100,
+        "pr_interval": 160,
+        "qrs_duration": 140,
+        "qt_interval": 390,
+        "qtc_bazett": 435,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "M",
+        "leads": {
+            "V1": {"has_rsr_prime": True, "qrs_amplitude": 8},
+            "V2": {"has_rsr_prime": True, "qrs_amplitude": 10},
+            "DI": {"has_wide_s": True, "qrs_amplitude": 6},
+            "V6": {"has_wide_s": True, "qrs_amplitude": 7},
+        },
+    }
+    print("Cenario 6 -- BRD completo:")
+    findings = apply_clinical_rules(rbbb)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "RBBB" in codes
+    assert "RIGHT_AXIS_DEVIATION" in codes
+    print("  OK\n")
+
+    # --- Cenário 7: WPW ---
+    wpw = {
+        "heart_rate": 80,
+        "axis": 20,
+        "pr_interval": 100,
+        "qrs_duration": 130,
+        "qt_interval": 380,
+        "qtc_bazett": 425,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "M",
+        "leads": {
+            "V1": {"has_delta_wave": True},
+            "V2": {"has_delta_wave": True},
+            "DII": {"has_delta_wave": True},
+        },
+    }
+    print("Cenario 7 -- WPW (PR=100, delta, QRS=130):")
+    findings = apply_clinical_rules(wpw)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "WPW" in codes
+    print("  OK\n")
+
+    # --- Cenário 8: QT curto ---
+    short_qt = {
+        "heart_rate": 75,
+        "axis": 40,
+        "pr_interval": 150,
+        "qrs_duration": 84,
+        "qt_interval": 280,
+        "qtc_bazett": 320,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "M",
+        "leads": {},
+    }
+    print("Cenario 8 -- QT curto (QTc=320):")
+    findings = apply_clinical_rules(short_qt)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "SHORT_QT" in codes
+    print("  OK\n")
+
+    # --- Cenário 9: Taquicardia ---
+    tachy = {
+        "heart_rate": 120,
+        "axis": 70,
+        "pr_interval": 140,
+        "qrs_duration": 86,
+        "qt_interval": 320,
+        "qtc_bazett": 410,
+        "rhythm": "sinus",
+        "p_wave_present": True,
+        "sex": "M",
+        "leads": {},
+    }
+    print("Cenario 9 -- Taquicardia sinusal (FC=120):")
+    findings = apply_clinical_rules(tachy)
+    codes = [f["code"] for f in findings]
+    print(f"  Achados: {codes}")
+    assert "TACHYCARDIA" in codes
+    print("  OK\n")
+
+    print("=" * 50)
+    print("Todos os cenarios passaram!")

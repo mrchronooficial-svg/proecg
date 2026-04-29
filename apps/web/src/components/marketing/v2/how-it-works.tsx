@@ -31,17 +31,17 @@ const steps = [
 export function HowItWorks() {
   return (
     <section id="how" className="bg-white py-20 sm:py-32 lg:py-40">
-      <div className="mx-auto max-w-7xl px-5 sm:px-6">
+      <div className="mx-auto max-w-7xl px-6">
         <Reveal className="text-center">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#0066CC] sm:text-[13px]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0066CC] sm:text-[13px]">
             Como Funciona
           </p>
-          <h2 className="mt-3 text-[32px] font-semibold leading-[1.1] tracking-tight text-[#1d1d1f] sm:text-[48px] lg:text-[56px]">
+          <h2 className="mt-4 text-[30px] font-bold leading-[1.1] tracking-[-0.02em] break-words text-[#1d1d1f] sm:mt-5 sm:text-[48px] lg:text-[56px]">
             3 passos para o laudo instantâneo.
           </h2>
         </Reveal>
 
-        <div className="mt-16 space-y-16 sm:mt-24 sm:space-y-32 lg:mt-32 lg:space-y-40">
+        <div className="mt-14 space-y-16 sm:mt-24 sm:space-y-32 lg:mt-32 lg:space-y-40">
           {steps.map((s, idx) => (
             <Reveal key={s.n}>
               <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-20">
@@ -52,18 +52,18 @@ export function HowItWorks() {
                 </div>
 
                 <div className={`text-center lg:text-left ${idx % 2 === 0 ? "lg:order-1" : "lg:order-2"}`}>
-                  <div className="mb-4 flex items-center justify-center gap-3 lg:justify-start">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#0066CC]/10 text-[#0066CC]">
+                  <div className="mb-4 flex items-center justify-center gap-2.5 sm:mb-5 sm:gap-3 lg:justify-start">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0066CC]/10 text-[#0066CC] sm:h-9 sm:w-9">
                       <s.icon className="h-4 w-4" />
                     </span>
-                    <span className="text-[12px] font-semibold tracking-[0.15em] text-[#1d1d1f]/50 sm:text-[13px]">
+                    <span className="text-[11px] font-semibold tracking-[0.15em] text-[#0066CC] sm:text-[13px]">
                       PASSO {s.n}
                     </span>
                   </div>
-                  <h3 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[#1d1d1f] sm:text-[36px] lg:text-[44px]">
+                  <h3 className="text-[22px] font-bold leading-[1.2] tracking-[-0.01em] text-[#1d1d1f] sm:text-[36px] lg:text-[44px]">
                     {s.title}
                   </h3>
-                  <p className="mx-auto mt-4 max-w-xl text-[16px] leading-[1.6] text-[#1d1d1f]/65 sm:mt-5 sm:text-[18px] lg:mx-0 lg:text-[19px]">
+                  <p className="mx-auto mt-4 max-w-xl text-[15px] leading-[1.55] text-[#86868b] sm:mt-5 sm:text-[18px] lg:mx-0 lg:text-[19px]">
                     {s.body}
                   </p>
                 </div>

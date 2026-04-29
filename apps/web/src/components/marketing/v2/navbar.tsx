@@ -31,7 +31,7 @@ export function Navbar() {
           : "bg-transparent"
       }`}
     >
-      <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-5 sm:h-14 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
         <a
           href="#hero"
           className={`text-[17px] font-semibold tracking-tight transition-colors duration-300 ${
@@ -79,7 +79,7 @@ export function Navbar() {
 
       {/* mobile fullscreen overlay */}
       {open && (
-        <div className="fixed inset-0 top-12 z-40 flex flex-col bg-white/98 backdrop-blur-xl md:hidden">
+        <div className="fixed inset-0 top-14 z-40 flex flex-col bg-white/98 backdrop-blur-xl md:hidden">
           <nav className="flex flex-1 flex-col px-6 pt-8">
             {links.map((l) => (
               <a

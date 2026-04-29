@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { ECGTrace, IPhoneMockup } from "./iphone-mockup";
 
@@ -15,13 +14,13 @@ export function Hero() {
           "radial-gradient(60% 80% at 70% 20%, rgba(26,26,62,0.9), transparent 60%), radial-gradient(50% 60% at 20% 80%, rgba(0,102,204,0.25), transparent 60%), linear-gradient(180deg, #050510 0%, #0d0d20 60%, #1a1a3e 100%)",
       }}
     >
-      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-5 pt-24 pb-16 sm:px-6 sm:gap-16 sm:pt-32 sm:pb-24 lg:grid-cols-2 lg:gap-12">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 pt-24 pb-16 sm:gap-16 sm:px-6 sm:pt-32 sm:pb-24 lg:grid-cols-2 lg:gap-12">
         <div className="text-center lg:text-left">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[12px] font-medium tracking-wide text-white/80 backdrop-blur sm:mb-6"
+            className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[12px] font-medium tracking-wide text-white/85 backdrop-blur sm:mb-6 sm:px-3.5 sm:py-1.5 sm:text-[13px]"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-[#0a84ff]" />
             ProECG
@@ -31,7 +30,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.05 }}
-            className="text-[36px] font-semibold leading-[1.05] tracking-tight sm:text-[52px] lg:text-[68px]"
+            className="text-[34px] font-bold leading-[1.05] tracking-[-0.02em] break-words sm:text-[56px] lg:text-[68px]"
           >
             Inteligência Artificial
             <br />
@@ -44,7 +43,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.15 }}
-            className="mx-auto mt-5 max-w-xl text-[17px] leading-[1.6] text-white/70 sm:mt-6 sm:text-[19px] lg:mx-0"
+            className="mx-auto mt-5 max-w-xl text-[16px] leading-[1.5] text-white/70 sm:mt-6 sm:text-[19px] lg:mx-0"
           >
             Laudo de ECG em segundos. Usado por médicos emergencistas, intensivistas e generalistas em todo o Brasil.
           </motion.p>
@@ -53,20 +52,19 @@ export function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25 }}
-            className="mt-8 flex w-full flex-col items-stretch gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4"
+            className="mt-7 flex flex-row items-center justify-center gap-3 sm:mt-10 sm:flex-wrap sm:gap-4 lg:justify-start"
           >
             <Link
               href="/login"
-              className="rounded-full bg-[#0066CC] px-7 py-3.5 text-center text-[15px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(0,102,204,0.6)] transition-all hover:bg-[#0055aa] hover:shadow-[0_12px_32px_-8px_rgba(0,102,204,0.8)]"
+              className="rounded-full bg-[#0a84ff] px-5 py-2.5 text-center text-[15px] font-medium text-white transition-all hover:bg-[#0066cc] sm:px-6 sm:text-[17px]"
             >
               Começar Agora
             </Link>
             <a
               href="#how"
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-6 py-3.5 text-[15px] font-medium text-white/90 backdrop-blur transition-colors hover:bg-white/5"
+              className="rounded-full border border-[#0a84ff] px-5 py-2.5 text-center text-[15px] font-medium text-[#0a84ff] transition-colors hover:bg-[#0a84ff]/10 sm:px-6 sm:text-[17px]"
             >
-              Ver como funciona
-              <ArrowDown className="h-4 w-4" />
+              Saiba mais
             </a>
           </motion.div>
 
@@ -74,7 +72,7 @@ export function Hero() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.5 }}
-            className="mx-auto mt-10 max-w-md text-[12px] leading-relaxed text-white/45 sm:mt-12 lg:mx-0"
+            className="mx-auto mt-10 max-w-md text-[12px] leading-relaxed text-white/55 sm:mt-14 sm:text-[14px] lg:mx-0"
           >
             Ferramenta de apoio à decisão clínica — não substitui avaliação médica.
           </motion.p>
@@ -84,10 +82,10 @@ export function Hero() {
           initial={{ opacity: 0, scale: 0.92, y: 30 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.2, ease: [0.21, 0.47, 0.32, 0.98] }}
-          className="relative flex items-center justify-center"
+          className="relative flex items-center justify-center pt-4 sm:pt-0"
         >
           {/* glow */}
-          <div className="absolute inset-0 -z-10 mx-auto h-[420px] w-[420px] rounded-full bg-[#0a84ff]/20 blur-[100px]" />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#0a84ff]/20 blur-[100px] sm:h-[420px] sm:w-[420px]" />
           <IPhoneMockup>
             <PhoneScreenContent />
           </IPhoneMockup>

@@ -39,24 +39,24 @@ const items = [
 export function Benefits() {
   return (
     <section className="bg-[#f5f5f7] py-20 sm:py-32 lg:py-40">
-      <div className="mx-auto max-w-7xl px-5 sm:px-6">
+      <div className="mx-auto max-w-7xl px-6">
         <Reveal>
-          <h2 className="max-w-3xl text-[32px] font-semibold leading-[1.05] tracking-tight text-[#1d1d1f] sm:text-[48px] lg:text-[56px]">
+          <h2 className="max-w-3xl text-center text-[28px] font-bold leading-[1.15] tracking-[-0.02em] break-words text-[#1d1d1f] sm:text-left sm:text-[48px] lg:text-[56px]">
             Por que médicos escolhem o ProECG.
           </h2>
         </Reveal>
 
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:mt-16 sm:gap-5 md:grid-cols-2 lg:mt-20">
+        <div className="mt-10 grid grid-cols-1 gap-4 sm:mt-16 sm:gap-5 md:grid-cols-2 lg:mt-20">
           {items.map((it, i) => (
             <Reveal key={it.title} delay={i * 0.05}>
-              <div className="group h-full rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.12)] sm:rounded-3xl sm:p-8 lg:p-10">
+              <div className="group h-full rounded-2xl bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.12)] sm:rounded-3xl sm:p-8 lg:p-10">
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0066CC]/10 text-[#0066CC] transition-colors group-hover:bg-[#0066CC] group-hover:text-white sm:h-12 sm:w-12">
                   <it.icon className="h-5 w-5" />
                 </div>
-                <h3 className="mt-5 text-[20px] font-semibold leading-[1.2] tracking-tight text-[#1d1d1f] sm:mt-6 sm:text-[24px] lg:text-[26px]">
+                <h3 className="mt-5 text-[18px] font-bold leading-[1.25] tracking-[-0.01em] text-[#1d1d1f] sm:mt-6 sm:text-[24px] lg:text-[26px]">
                   {it.title}
                 </h3>
-                <p className="mt-2.5 text-[15px] leading-[1.55] text-[#1d1d1f]/65 sm:mt-3 sm:text-[16px] lg:text-[17px]">
+                <p className="mt-2.5 text-[14px] leading-[1.5] text-[#86868b] sm:mt-3 sm:text-[16px] lg:text-[17px]">
                   {it.body}
                 </p>
               </div>

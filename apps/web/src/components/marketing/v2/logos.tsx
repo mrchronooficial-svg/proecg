@@ -7,21 +7,21 @@ export function Logos() {
   const loop = [...partners, ...partners];
 
   return (
-    <section className="bg-white py-14 sm:py-20">
-      <div className="mx-auto max-w-7xl px-5 sm:px-6">
-        <p className="text-center text-[12px] font-medium uppercase tracking-[0.18em] text-[#1d1d1f]/55 sm:text-[13px]">
+    <section className="bg-white py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-6">
+        <p className="text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-[#86868b] sm:text-[13px]">
           Tecnologia baseada em evidências científicas
         </p>
 
-        <div className="relative mt-8 overflow-hidden sm:mt-10">
+        <div className="relative mt-10 overflow-hidden sm:mt-14">
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-white to-transparent sm:w-24" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-white to-transparent sm:w-24" />
 
-          <div className="flex w-max animate-[scroll_40s_linear_infinite] gap-6 sm:gap-12">
+          <div className="flex w-max animate-[scroll_40s_linear_infinite] items-center gap-10 sm:gap-16">
             {loop.map((p, i) => (
               <div
                 key={`${p}-${i}`}
-                className="flex h-9 min-w-[120px] items-center justify-center rounded-lg bg-[#f5f5f7] px-5 text-[14px] font-bold tracking-tight text-[#1d1d1f]/40 grayscale sm:h-14 sm:min-w-[180px] sm:px-8 sm:text-[18px]"
+                className="text-[18px] font-bold tracking-tight text-[#1d1d1f]/30 sm:text-[26px]"
               >
                 {p}
               </div>

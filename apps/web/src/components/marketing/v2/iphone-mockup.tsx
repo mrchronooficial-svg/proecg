@@ -12,7 +12,7 @@ export function IPhoneMockup({
 }) {
   return (
     <div
-      className={`relative mx-auto aspect-[9/19.5] w-full max-w-[240px] rounded-[44px] bg-[#1d1d1f] p-[10px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5),0_10px_30px_-10px_rgba(0,0,0,0.3)] ring-1 ring-white/10 sm:max-w-[280px] ${className}`}
+      className={`relative mx-auto aspect-[9/19.5] w-full max-w-[300px] rounded-[44px] bg-[#1d1d1f] p-[10px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5),0_10px_30px_-10px_rgba(0,0,0,0.3)] ring-1 ring-white/10 sm:max-w-[280px] ${className}`}
     >
       {/* notch */}
       <div className="pointer-events-none absolute left-1/2 top-[14px] z-20 h-[22px] w-[90px] -translate-x-1/2 rounded-full bg-black" />

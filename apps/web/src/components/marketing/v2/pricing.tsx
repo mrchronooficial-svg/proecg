@@ -22,17 +22,17 @@ const plans = [
 export function Pricing() {
   return (
     <section id="pricing" className="bg-[#f5f5f7] py-20 sm:py-32 lg:py-40">
-      <div className="mx-auto max-w-7xl px-5 sm:px-6">
+      <div className="mx-auto max-w-7xl px-6">
         <Reveal className="text-center">
-          <h2 className="text-[32px] font-semibold leading-[1.05] tracking-tight text-[#1d1d1f] sm:text-[48px] lg:text-[56px]">
+          <h2 className="text-[30px] font-bold leading-[1.1] tracking-[-0.02em] break-words text-[#1d1d1f] sm:text-[48px] lg:text-[56px]">
             Planos simples e transparentes.
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-[16px] leading-[1.6] text-[#1d1d1f]/65 sm:mt-5 sm:text-[18px]">
+          <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-[1.5] text-[#86868b] sm:mt-5 sm:text-[18px]">
             Sem limites de uso, sem letras miúdas. Pagamento via Pix ou cartão.
           </p>
         </Reveal>
 
-        <div className="mt-12 grid grid-cols-1 gap-5 sm:mt-16 sm:gap-6 lg:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-5 sm:mt-16 sm:gap-6 lg:grid-cols-3">
           {plans.map((p, i) => (
             <Reveal key={p.name} delay={i * 0.08}>
               <div
@@ -43,12 +43,12 @@ export function Pricing() {
                 }`}
               >
                 {p.popular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#0066CC] px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-white">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#0066CC] px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white sm:px-4 sm:py-1.5 sm:text-[12px]">
                     Mais popular
                   </span>
                 )}
 
-                <div className="text-[16px] font-semibold tracking-tight text-[#1d1d1f]">
+                <div className="text-[17px] font-semibold tracking-[-0.01em] text-[#1d1d1f] sm:text-[16px]">
                   {p.name}
                 </div>
                 {p.save && (
@@ -57,16 +57,16 @@ export function Pricing() {
 
                 <div className="mt-5 flex items-baseline gap-1 sm:mt-6">
                   <span className="text-[14px] font-medium text-[#1d1d1f]/70">R$</span>
-                  <span className="text-[44px] font-semibold leading-none tracking-tight text-[#1d1d1f] sm:text-[56px]">
+                  <span className="text-[44px] font-bold leading-none tracking-[-0.02em] text-[#1d1d1f] sm:text-[56px]">
                     {p.price}
                   </span>
-                  <span className="text-[14px] text-[#1d1d1f]/55">{p.period}</span>
+                  <span className="text-[14px] text-[#86868b]">{p.period}</span>
                 </div>
-                <div className="mt-1 text-[12px] text-[#1d1d1f]/55">{p.note}</div>
+                <div className="mt-1.5 text-[12px] text-[#86868b]">{p.note}</div>
 
                 <Link
                   href="/assinar"
-                  className={`mt-6 block w-full rounded-full px-6 py-3.5 text-center text-[15px] font-medium transition-colors sm:mt-8 sm:py-3 sm:text-[14px] ${
+                  className={`mt-6 block w-full rounded-full px-6 py-3 text-center text-[15px] font-semibold transition-colors sm:mt-8 sm:py-3 sm:text-[14px] sm:font-medium ${
                     p.popular
                       ? "bg-[#0066CC] text-white hover:bg-[#0055aa]"
                       : "bg-[#1d1d1f] text-white hover:bg-[#1d1d1f]/85"
@@ -75,10 +75,10 @@ export function Pricing() {
                   Assinar
                 </Link>
 
-                <ul className="mt-6 space-y-3 text-[14px] text-[#1d1d1f]/75 sm:mt-8 sm:text-[14.5px]">
+                <ul className="mt-6 space-y-2.5 text-[14px] text-[#1d1d1f]/80 sm:mt-8 sm:space-y-3 sm:text-[14.5px]">
                   {features.map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
-                      <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#0066CC]" />
+                      <Check className="mt-1 h-4 w-4 flex-shrink-0 text-[#0066CC]" />
                       <span>{f}</span>
                     </li>
                   ))}
@@ -89,7 +89,7 @@ export function Pricing() {
         </div>
 
         <Reveal delay={0.3}>
-          <p className="mt-10 text-center text-[12px] text-[#1d1d1f]/55 sm:mt-12 sm:text-[13px]">
+          <p className="mt-10 text-center text-[12px] text-[#86868b] sm:mt-12 sm:text-[13px]">
             Pagamento via Pix ou cartão. Cancele quando quiser.
           </p>
         </Reveal>

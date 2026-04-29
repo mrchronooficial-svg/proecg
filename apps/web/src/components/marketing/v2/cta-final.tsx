@@ -23,7 +23,7 @@ export function CTAFinal() {
           <div className="mt-8 flex flex-col items-stretch gap-3 sm:mt-10 sm:items-center sm:gap-4">
             <Link
               href="/login"
-              className="block w-full rounded-full bg-white px-6 py-3.5 text-center text-[16px] font-semibold text-[#1d1d1f] shadow-[0_20px_40px_-15px_rgba(255,255,255,0.4)] transition-transform hover:scale-[1.02] sm:inline-block sm:w-auto sm:px-9 sm:py-4 sm:text-[16px]"
+              className="block w-full rounded-full bg-white px-6 py-3.5 text-center text-[16px] font-semibold text-[#1d1d1f] shadow-[0_8px_20px_-10px_rgba(255,255,255,0.4)] transition-transform hover:scale-[1.02] sm:inline-block sm:w-auto sm:px-9 sm:py-4 sm:text-[16px] sm:shadow-[0_20px_40px_-15px_rgba(255,255,255,0.4)]"
             >
               Criar conta gratuita
             </Link>

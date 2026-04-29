@@ -17,7 +17,7 @@ export function Logos() {
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-white to-transparent sm:w-24" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-white to-transparent sm:w-24" />
 
-          <div className="flex w-max animate-[scroll_40s_linear_infinite] items-center gap-10 sm:gap-16">
+          <div className="logos-track flex w-max items-center gap-10 sm:gap-16">
             {loop.map((p, i) => (
               <div
                 key={`${p}-${i}`}
@@ -31,9 +31,15 @@ export function Logos() {
       </div>
 
       <style jsx>{`
+        .logos-track {
+          animation: scroll 40s linear infinite;
+        }
         @keyframes scroll {
           from { transform: translateX(0); }
           to   { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .logos-track { animation: none; }
         }
       `}</style>
     </section>

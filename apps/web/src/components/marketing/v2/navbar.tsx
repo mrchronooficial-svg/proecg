@@ -32,10 +32,18 @@ export function Navbar() {
       <header
         className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
           lightHeader
-            ? "border-b border-black/5 backdrop-blur-xl"
+            ? "border-b border-black/5 md:backdrop-blur-xl"
             : "bg-transparent"
         }`}
-        style={lightHeader ? { backgroundColor: open ? "#ffffff" : "rgba(255,255,255,0.85)" } : undefined}
+        style={
+          lightHeader
+            ? {
+                // Em mobile usamos opacidade alta sem blur (backdrop-blur custa
+                // muito no GPU mobile durante scroll). Em md+ o blur entra via classe.
+                backgroundColor: open ? "#ffffff" : "rgba(255,255,255,0.97)",
+              }
+            : undefined
+        }
       >
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
           <a

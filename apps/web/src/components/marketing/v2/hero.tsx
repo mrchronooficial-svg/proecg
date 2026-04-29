@@ -84,8 +84,8 @@ export function Hero() {
           transition={{ duration: 0.9, delay: 0.2, ease: [0.21, 0.47, 0.32, 0.98] }}
           className="relative flex items-center justify-center pt-4 sm:pt-0"
         >
-          {/* glow */}
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#0a84ff]/20 blur-[100px] sm:h-[420px] sm:w-[420px]" />
+          {/* glow — blur menor em mobile (raio grande de blur custa muito GPU) */}
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#0a84ff]/20 blur-[55px] sm:h-[420px] sm:w-[420px] sm:blur-[100px]" />
           <IPhoneMockup>
             <PhoneScreenContent />
           </IPhoneMockup>

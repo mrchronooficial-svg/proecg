@@ -38,7 +38,7 @@ export function Pricing() {
               <div
                 className={`relative h-full rounded-2xl bg-white p-6 sm:rounded-3xl sm:p-8 lg:p-10 ${
                   p.popular
-                    ? "ring-2 ring-[#0066CC] shadow-[0_30px_60px_-20px_rgba(0,102,204,0.35)]"
+                    ? "ring-2 ring-[#0066CC] shadow-[0_8px_20px_-8px_rgba(0,102,204,0.3)] sm:shadow-[0_30px_60px_-20px_rgba(0,102,204,0.35)]"
                     : "shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
                 }`}
               >

@@ -160,26 +160,48 @@ def _merge_findings(
     rule_findings: list[dict],
     cnn_findings: list[dict],
 ) -> list[dict]:
-    """Combina achados de regras e CNN, deduplicando."""
-    rule_codes = {f["code"] for f in rule_findings}
-    merged: list[dict] = list(rule_findings)
+    """Combina achados de regras + CNN, deduplicando.
 
+    Lógica de confidence:
+      - Detectado por regra E CNN  → source="cnn+rules", confidence=1.0 (alta)
+      - Apenas regra               → source="rules",     confidence=1.0 (alta)
+      - Apenas CNN, score ≥ 0.70   → source="cnn",       confidence=score (média)
+      - Apenas CNN, score < 0.70   → source="cnn",       confidence=score (baixa)
+
+    Cada achado retornado tem campo "confidence" (float 0–1).
+    """
+    rule_codes = {f["code"] for f in rule_findings}
+    merged: list[dict] = []
+
+    # 1. Achados das regras (todos confidence = 1.0)
+    for rf in rule_findings:
+        merged.append({
+            **rf,
+            "source": rf.get("source", "rules"),
+            "confidence": 1.0,
+        })
+
+    # 2. Achados da CNN (deduplicados contra regras)
     for cnn_f in cnn_findings:
         cnn_code = cnn_f.get("code", "")
         mapped = CNN_TO_RULE_MAP.get(cnn_code)
+        score = float(cnn_f.get("score", 0.0))
 
         if mapped and mapped in rule_codes:
-            # Marcar como dupla confirmacao
-            for f in merged:
-                if f["code"] == mapped:
-                    f["source"] = "cnn+rules"
+            # Confirmação cruzada → marca o existente
+            for m in merged:
+                if m["code"] == mapped:
+                    m["source"] = "cnn+rules"
+                    m["cnn_score"] = score
                     break
         else:
             merged.append({
-                "code": cnn_f.get("code", "unknown"),
+                "code": cnn_code or "unknown",
                 "description": cnn_f.get("description", ""),
                 "source": "cnn",
                 "leads_affected": cnn_f.get("leads_affected", []),
+                "confidence": round(score, 3),
+                "cnn_score": score,
             })
 
     return merged
@@ -331,6 +353,11 @@ def generate_report(
     if cnn_findings is None:
         cnn_findings = []
 
+    # Auto-converte formato novo (estruturado) → legacy se necessário
+    if isinstance(measurements.get("heart_rate"), dict):
+        from .measure import to_legacy_format
+        measurements = to_legacy_format(measurements)
+
     # Combinar achados
     all_findings = _merge_findings(rule_findings, cnn_findings)
 
@@ -369,6 +396,186 @@ def generate_report(
         "findings": all_findings,
         "diagnoses": diagnoses,
         "report_text": report_text,
+    }
+
+
+# ------------------------------------------------------------------
+# Saída estruturada pro frontend (red flags + severidade + JSON)
+# ------------------------------------------------------------------
+
+# Severidade por código de diagnóstico
+_DIAGNOSIS_SEVERITY: dict[str, str] = {
+    # Críticos (red flags)
+    "sca_supra": "critical", "sca_com_supra": "critical",
+    "STEMI_ANTERIOR": "critical", "STEMI_INFERIOR": "critical",
+    "STEMI_LATERAL": "critical", "STEMI_SEPTAL": "critical",
+    "STEMI_POSTERIOR": "critical",
+    "SGARBOSSA_POSITIVE": "critical", "SMITH_MODIFIED_SGARBOSSA": "critical",
+    "tv_mono": "critical", "tv_poli": "critical", "torsades": "critical",
+    "bav_total": "critical", "BAV_TOTAL": "critical",
+    "HYPERKALEMIA_SEVERE": "critical",
+    "CARDIAC_TAMPONADE": "critical",
+    "BRUGADA_TYPE1": "critical",
+    "fa_pre_excitada": "critical",
+    # Moderados
+    "AVB_FIRST_DEGREE": "moderate",
+    "RBBB": "moderate", "LBBB": "moderate",
+    "LONG_QT": "moderate", "SHORT_QT": "moderate",
+    "WPW": "moderate",
+    "LVH_SOKOLOW": "moderate", "RVH": "moderate",
+    "LAE": "moderate", "RAE": "moderate",
+    "ST_DEPRESSION": "moderate",
+    "S1Q3T3": "moderate",
+    "HYPOKALEMIA": "moderate",
+    # Leves
+    "TACHYCARDIA": "low", "BRADYCARDIA": "low",
+    "SEVERE_SINUS_BRADYCARDIA": "moderate",
+    "LEFT_AXIS_DEVIATION": "low", "RIGHT_AXIS_DEVIATION": "low",
+}
+
+
+def _detect_red_flags(measurements: dict, findings: list[dict]) -> list[str]:
+    """Identifica red flags (alertas críticos) que exigem atenção imediata.
+
+    Critérios:
+      - Supra ST por território (STEMI)
+      - FC < 30 ou > 180
+      - QRS > 160ms (possível TV / bloqueio severo)
+      - BAV total
+      - QTc > 550ms (risco de torsades)
+    """
+    flags: list[str] = []
+
+    # Converte pra legacy se necessário (pra ler campos planos)
+    if isinstance(measurements.get("heart_rate"), dict):
+        from .measure import to_legacy_format
+        m = to_legacy_format(measurements)
+    else:
+        m = measurements
+
+    # STEMI (qualquer território)
+    for f in findings:
+        code = f.get("code", "")
+        if code.startswith("STEMI_") or code in ("sca_supra", "sca_com_supra"):
+            terr = code.replace("STEMI_", "").lower() if code.startswith("STEMI_") else "supra"
+            flags.append(f"STEMI {terr}")
+        if code in ("SGARBOSSA_POSITIVE", "SMITH_MODIFIED_SGARBOSSA"):
+            flags.append("Sgarbossa positivo (SCA em BRE)")
+        if code in ("BAV_TOTAL", "bav_total"):
+            flags.append("BAV total (3º grau)")
+        if code == "BRUGADA_TYPE1":
+            flags.append("Brugada tipo 1")
+        if code == "HYPERKALEMIA_SEVERE":
+            flags.append("Hipercalemia grave")
+        if code == "CARDIAC_TAMPONADE":
+            flags.append("Tamponamento cardíaco")
+        if code in ("tv_mono", "tv_poli", "torsades"):
+            flags.append(code.upper())
+
+    # FC extrema
+    hr = m.get("heart_rate")
+    if hr is not None:
+        if hr < 30:
+            flags.append(f"Bradicardia extrema (FC {hr:.0f} bpm)")
+        elif hr > 180:
+            flags.append(f"Taquicardia extrema (FC {hr:.0f} bpm)")
+
+    # QRS muito largo (possível TV)
+    qrs = m.get("qrs_duration")
+    if qrs is not None and qrs > 160:
+        flags.append(f"QRS muito largo ({qrs:.0f}ms — possível TV ou bloqueio severo)")
+
+    # QTc muito longo (risco torsades)
+    qtc = m.get("qtc_bazett")
+    if qtc is not None and qtc > 550:
+        flags.append(f"QTc muito longo ({qtc:.0f}ms — risco de torsades)")
+
+    # Dedup mantendo ordem
+    seen = set()
+    deduped = []
+    for f in flags:
+        if f not in seen:
+            seen.add(f)
+            deduped.append(f)
+    return deduped
+
+
+def _classify_overall_severity(red_flags: list[str], diagnoses: list[dict]) -> str:
+    """Severidade geral do laudo: critical / moderate / normal."""
+    if red_flags:
+        return "critical"
+    for d in diagnoses:
+        sev = _DIAGNOSIS_SEVERITY.get(d.get("code", ""), "low")
+        if sev in ("critical", "moderate"):
+            return "moderate"
+    if diagnoses:
+        return "moderate"
+    return "normal"
+
+
+def generate_frontend_report(
+    measurements: dict,
+    rule_findings: list[dict],
+    cnn_findings: list[dict] | None = None,
+) -> dict:
+    """Gera o JSON estruturado pro frontend.
+
+    Returns:
+        {
+            "text_report": str,
+            "measurements": dict (original, formato novo ou legacy),
+            "diagnoses": [{name, confidence, source, severity, code}],
+            "red_flags": [str],
+            "severity": "critical" | "moderate" | "normal",
+            "warnings": [str]
+        }
+    """
+    rep = generate_report(measurements, rule_findings, cnn_findings)
+
+    red_flags = _detect_red_flags(measurements, rep["findings"])
+    severity = _classify_overall_severity(red_flags, rep["diagnoses"])
+
+    # Mapa code → confidence/source dos findings (que já têm confidence)
+    finding_lookup = {f.get("code"): f for f in rep["findings"]}
+
+    # Diagnoses com severidade + confidence numérica
+    diagnoses_out = []
+    for d in rep["diagnoses"]:
+        code = d.get("code", "")
+        # Tenta achar achado correspondente pra herdar confidence/source
+        related = finding_lookup.get(code)
+        if related:
+            confidence = float(related.get("confidence", 1.0))
+            source = related.get("source", "rules")
+        else:
+            confidence = 1.0 if d.get("source") == "rules" else 0.7
+            source = d.get("source", "rules")
+        diagnoses_out.append({
+            "name": d.get("description", code),
+            "code": code,
+            "confidence": round(confidence, 3),
+            "source": source,
+            "severity": _DIAGNOSIS_SEVERITY.get(code, "low"),
+        })
+
+    # Warnings — combina warnings do measure_ecg + warnings de qualidade
+    warnings_: list[str] = []
+    m_warnings = measurements.get("warnings")
+    if isinstance(m_warnings, list):
+        warnings_.extend(m_warnings)
+    quality = measurements.get("quality")
+    if isinstance(quality, dict) and quality.get("overall") == "poor":
+        warnings_.append("Qualidade do sinal baixa — medições podem ser imprecisas")
+
+    return {
+        "text_report": rep["report_text"],
+        "measurements": measurements,
+        "diagnoses": diagnoses_out,
+        "red_flags": red_flags,
+        "severity": severity,
+        "warnings": warnings_,
+        # Campos auxiliares (debugging / pipeline)
+        "_findings_raw": rep["findings"],
     }
 
 

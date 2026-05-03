@@ -84,7 +84,7 @@ class ECGAnalyzer:
         # 2. Dotter UNet (digitalizador)
         try:
             from pathlib import Path
-            dotter_path = Path("/root/models/digitizer/dotter_best.pt")
+            dotter_path = Path("/root/models/digitizer/dotter_best.pth")
             if dotter_path.exists():
                 self.dotter_weights = torch.load(
                     str(dotter_path), map_location="cuda", weights_only=True,
@@ -93,7 +93,7 @@ class ECGAnalyzer:
             else:
                 self.dotter_weights = None
                 self.dotter_available = False
-                print("[WARN] dotter_best.pt nao encontrado — usando mock")
+                print("[WARN] dotter_best.pth nao encontrado — usando mock")
         except Exception as e:
             print(f"[WARN] Dotter nao carregou: {e} — usando mock")
             self.dotter_weights = None

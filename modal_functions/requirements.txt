@@ -9,6 +9,11 @@ requests>=2.28,<3
 Pillow>=9.0,<11
 modal>=0.60
 
+# Open-ECG-Digitizer (vendor): SignalExtractor usa skimage.measure.label
+scikit-image>=0.21,<1
+# Open-ECG-Digitizer (vendor): LeadIdentifier carrega layouts de YAML
+PyYAML>=6.0,<7
+
 # OCR (correção de orientação)
 easyocr>=1.7,<2
 

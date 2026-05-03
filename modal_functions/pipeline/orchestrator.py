@@ -49,7 +49,7 @@ from .digitize.ecg_digitizer import ECGDigitizer, LEAD_ORDER
 from .measure import measure_ecg
 from .rules import apply_clinical_rules
 from .classify import classify_ecg, EXPECTED_LENGTH
-from .report import generate_report, RED_FLAG_CODES
+from .report import generate_frontend_report, generate_report, RED_FLAG_CODES
 
 # Frequencia alvo para CNN e medicoes
 TARGET_FS = 500
@@ -210,12 +210,15 @@ def analyze_from_file(
             logger.warning("CNN falhou: %s -- continuando sem CNN", e)
             cnn_findings = []
 
-        # --- 5. Laudo ---
+        # --- 5. Laudo (versão frontend com red flags + severidade) ---
         logger.info("Etapa 5/5: Geracao do laudo")
-        report = generate_report(measurements, rule_findings, cnn_findings)
-
-        # Extrair red flags
-        red_flags = _extract_red_flags(report["diagnoses"])
+        front = generate_frontend_report(measurements, rule_findings, cnn_findings)
+        report = {
+            "report_text": front["text_report"],
+            "findings": front.get("_findings_raw", []),
+            "diagnoses": front["diagnoses"],
+        }
+        red_flags_text = front.get("red_flags", [])
 
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -242,7 +245,9 @@ def analyze_from_file(
             },
             "findings": _strip_scores(report["findings"]),
             "diagnoses": report["diagnoses"],
-            "red_flags": _strip_scores(red_flags),
+            "red_flags": red_flags_text,
+            "severity": front.get("severity", "normal"),
+            "warnings": front.get("warnings", []),
             "metadata": {
                 "layout": quality.get("layout"),
                 "px_per_mm": px_per_mm,

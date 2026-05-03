@@ -75,6 +75,7 @@ CONFIDENCE_THRESHOLD = 0.5
 
 # Comprimento esperado do sinal (em amostras, 10s a 500Hz)
 EXPECTED_LENGTH = 5000
+TARGET_FS = 500
 
 
 # ---------------------------------------------------------------------------
@@ -164,42 +165,54 @@ def _load_model() -> ECGResNet:
     return model
 
 
-def _preprocess_signal(signal_12lead: np.ndarray) -> torch.Tensor:
+def _preprocess_signal(
+    signal_12lead: np.ndarray, fs_in: int = 500,
+) -> torch.Tensor:
     """Preprocessa sinal para entrada na CNN.
 
-    - Normaliza cada derivação (z-score)
-    - Ajusta comprimento para EXPECTED_LENGTH (pad ou truncate)
-    - Retorna tensor (1, 12, EXPECTED_LENGTH)
+    Pipeline:
+      1. Resample do fs_in → 500 Hz (TARGET_FS)
+      2. Ajusta comprimento pra EXPECTED_LENGTH (5000 amostras = 10s @ 500Hz)
+      3. Z-score por derivação
+      4. Tensor (1, 12, 5000)
     """
-    # Garantir shape (12, N)
     if signal_12lead.ndim != 2 or signal_12lead.shape[0] != 12:
         raise ValueError(f"Esperado (12, N), recebeu {signal_12lead.shape}")
 
     signal = signal_12lead.astype(np.float32).copy()
 
-    # Normalização por derivação (z-score)
-    for i in range(12):
-        lead = signal[i]
-        std = np.std(lead)
-        if std > 1e-6:
-            signal[i] = (lead - np.mean(lead)) / std
-        else:
-            signal[i] = lead - np.mean(lead)
+    # NaN → 0 (extração pode deixar NaN nas pontas)
+    signal = np.where(np.isnan(signal), 0.0, signal)
 
-    # Ajustar comprimento
+    # ---- 1. Resample pra 500 Hz se necessário ----
+    if fs_in != TARGET_FS and signal.shape[1] > 2:
+        from scipy.signal import resample
+        n_target = int(round(signal.shape[1] * TARGET_FS / fs_in))
+        if n_target > 1:
+            signal = resample(signal, n_target, axis=1).astype(np.float32)
+
+    # ---- 2. Ajusta pra EXPECTED_LENGTH (5000) ----
     n_samples = signal.shape[1]
     if n_samples >= EXPECTED_LENGTH:
-        # Pegar segmento central
+        # Center crop
         start = (n_samples - EXPECTED_LENGTH) // 2
         signal = signal[:, start:start + EXPECTED_LENGTH]
     else:
-        # Pad com zeros
+        # Pad zeros (centralizado)
         pad_total = EXPECTED_LENGTH - n_samples
         pad_left = pad_total // 2
         pad_right = pad_total - pad_left
         signal = np.pad(signal, ((0, 0), (pad_left, pad_right)), mode="constant")
 
-    # Converter para tensor PyTorch: (1, 12, EXPECTED_LENGTH)
+    # ---- 3. Z-score por derivação ----
+    for i in range(12):
+        lead = signal[i]
+        std = float(np.std(lead))
+        if std > 1e-6:
+            signal[i] = (lead - float(np.mean(lead))) / std
+        else:
+            signal[i] = lead - float(np.mean(lead))
+
     return torch.from_numpy(signal).unsqueeze(0)
 
 
@@ -207,41 +220,32 @@ def _preprocess_signal(signal_12lead: np.ndarray) -> torch.Tensor:
 # Função principal
 # ---------------------------------------------------------------------------
 
-def classify_ecg(signal_12lead: np.ndarray) -> list[dict]:
+def classify_ecg(
+    signal_12lead: np.ndarray,
+    fs_in: int = TARGET_FS,
+) -> list[dict]:
     """Classifica sinal de ECG usando ResNet-1D.
 
     Args:
         signal_12lead: array numpy (12, N) com o sinal das 12 derivações.
+        fs_in: sampling rate do sinal de entrada (Hz). Será resampleado pra 500Hz.
 
     Returns:
-        Lista de diagnósticos detectados, cada um com:
-            - code (str): código da classe (ex: "fa", "sca_supra")
-            - description (str): descrição clínica em português
-            - source (str): sempre "cnn"
-            - score (float): score do sigmoid (0-1)
-
-        Apenas diagnósticos com score >= CONFIDENCE_THRESHOLD são retornados.
-        A classe "normal" não é retornada como achado.
+        Lista de findings (acima do threshold), cada um:
+            {code, description, source="cnn", score}.
+        "normal" e "outros" não são reportados como achados.
     """
     model = _load_model()
-    input_tensor = _preprocess_signal(signal_12lead)
+    input_tensor = _preprocess_signal(signal_12lead, fs_in=fs_in)
 
     with torch.no_grad():
         logits = model(input_tensor)  # (1, NUM_CLASSES)
-        # Multi-label: sigmoid por classe (não softmax)
         scores = torch.sigmoid(logits).squeeze(0).numpy()
 
     findings: list[dict] = []
-
-    for idx, (class_name, score) in enumerate(zip(CLASS_NAMES, scores)):
-        # Não reportar "normal" como achado
-        if class_name == "normal":
+    for class_name, score in zip(CLASS_NAMES, scores):
+        if class_name in ("normal", "outros"):
             continue
-
-        # Não reportar "outros" — muito genérico
-        if class_name == "outros":
-            continue
-
         if score >= CONFIDENCE_THRESHOLD:
             findings.append({
                 "code": class_name,
@@ -250,7 +254,23 @@ def classify_ecg(signal_12lead: np.ndarray) -> list[dict]:
                 "score": round(float(score), 3),
             })
 
-    # Ordenar por score decrescente
     findings.sort(key=lambda f: f["score"], reverse=True)
-
     return findings
+
+
+def classify_ecg_full(
+    signal_12lead: np.ndarray,
+    fs_in: int = TARGET_FS,
+) -> dict:
+    """Versão completa: retorna probabilidades de TODAS as 13 classes.
+
+    Útil pro report combiner que precisa das probs por classe.
+    """
+    model = _load_model()
+    input_tensor = _preprocess_signal(signal_12lead, fs_in=fs_in)
+    with torch.no_grad():
+        logits = model(input_tensor)
+        scores = torch.sigmoid(logits).squeeze(0).numpy()
+    return {
+        cn: round(float(s), 3) for cn, s in zip(CLASS_NAMES, scores)
+    }

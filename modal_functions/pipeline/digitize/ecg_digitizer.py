@@ -15,7 +15,7 @@ Layouts suportados:
   - 6×2+1: 6 linhas × 2 derivações + DII longo (detectado se 6-7 faixas)
 
 Os módulos 2 (Dotter) e 5 (Leader) usam UNet de training/models/unet.py.
-  - Dotter: UNet treinado (dotter_best.pt) com fallback mock (HSV) se pesos ausentes
+  - Dotter: UNet treinado (dotter_best.pth) com fallback mock (HSV) se pesos ausentes
   - Leader: UNet treinado (leader_best.pt) com fallback mock (threshold) se pesos ausentes
 """
 
@@ -87,7 +87,7 @@ class ECGDigitizer:
 
     # Caminho default dos pesos — relativo ao diretório do módulo
     _DEFAULT_DOTTER_WEIGHTS = str(
-        Path(__file__).resolve().parents[2] / "models" / "digitizer" / "dotter_best.pt"
+        Path(__file__).resolve().parents[2] / "models" / "digitizer" / "dotter_best.pth"
     )
     _DEFAULT_LEADER_WEIGHTS = str(
         Path(__file__).resolve().parents[2] / "models" / "digitizer" / "leader_best.pt"
@@ -105,7 +105,7 @@ class ECGDigitizer:
                       Se False, usa UNet real para Dotter (com fallback mock se
                       pesos não disponíveis). Leader continua mock até ter pesos.
             dotter_weights: Caminho para pesos do Dotter (.pt).
-                            Default: modal_functions/models/digitizer/dotter_best.pt
+                            Default: modal_functions/models/digitizer/dotter_best.pth
             leader_weights: Caminho para pesos do Leader (.pt). Ignorado se use_mock=True.
         """
         self.use_mock = use_mock
@@ -158,6 +158,20 @@ class ECGDigitizer:
 
         quality_flags = {}
 
+        # 0. Quality scoring — rejeita rápido se foto não tem qualidade,
+        # antes de gastar GPU/CPU com Dotter/Leader.
+        from .quality_scorer import score_quality
+        qa = score_quality(img)
+        quality_flags["quality_check"] = qa
+        if not qa["accept"]:
+            logger.warning(
+                "Pipeline rejeitado pela checagem de qualidade: %s",
+                qa["rejection_reason"],
+            )
+            raise ValueError(
+                f"Imagem rejeitada na checagem de qualidade: {qa['rejection_reason']}"
+            )
+
         # 1. Pré-processamento
         cropped, crop_info = self.preprocess(img)
         quality_flags["crop"] = crop_info
@@ -206,27 +220,128 @@ class ECGDigitizer:
             "fallback": layout.get("fallback", False),
         }
 
-        # 5. Leader — segmentar traçados
-        if self.use_mock:
-            lead_mask = self.leader_mock(normalized)
-        else:
-            lead_mask = self.leader(normalized)
-        quality_flags["lead_pixels"] = int(np.sum(lead_mask > 0))
+        # 4.6. Calibrador — escala física (px/mm, ganho, sampling rate, µV/px)
+        # Usa a matriz do Gridder + imagem normalizada pra calcular escala
+        # horizontal e vertical separadamente; opcionalmente valida com o
+        # pulso de calibração de 1 mV.
+        try:
+            from .calibrator import calibrate
+            calibration = calibrate(
+                grid_matrix=grid_matrix,
+                normalized_image=normalized,
+                n_lead_bands=layout.get("n_rows", 3),
+            )
+            quality_flags["calibration"] = calibration
+            calibrated_px_per_mm = calibration["px_per_mm"]
+            sampling_rate = int(round(calibration["sampling_rate_hz"]))
+        except Exception as e:
+            logger.warning("Calibrador falhou (%s) — fallback px_per_mm do Gridder", e)
+            quality_flags["calibration"] = {"error": f"{type(e).__name__}: {e}"}
+            calibrated_px_per_mm = grid_info["px_per_mm"]
+            sampling_rate = int(round(calibrated_px_per_mm * PAPER_SPEED_DEFAULT))
 
-        # 6. Extração de sinal
-        signals, extraction_info = self.extract_signals(
-            lead_mask, grid_info["px_per_mm"]
-        )
-        quality_flags.update(extraction_info)
+        # 5. Segmentação + extração FULL Stenhede (end-to-end)
+        # ----------------------------------------------------------------
+        # Caminho PADRÃO: U-Net Stenhede → SignalExtractor (imagem inteira)
+        # → LeadIdentifier (atribui nomes + converte pra µV). Eliminamos a
+        # lógica de cells/baseline do nosso lead_separator.
+        # Fallback automático ao caminho cell-by-cell se o full pipeline
+        # falhar.
+        from .stenhede_adapter import extract_signals_stenhede
 
-        sampling_rate = int(round(grid_info["px_per_mm"] * PAPER_SPEED_DEFAULT))
+        try:
+            cal_dict = (
+                calibration
+                if isinstance(calibration, dict)
+                else {
+                    "px_per_mm": calibrated_px_per_mm,
+                    "uv_per_pixel": 1000.0 / (calibrated_px_per_mm * GAIN_DEFAULT),
+                    "sampling_rate_hz": float(sampling_rate),
+                }
+            )
+            stenhede_result = extract_signals_stenhede(
+                image_bgr=normalized,
+                px_per_mm=float(cal_dict["px_per_mm"]),
+                paper_speed=float(PAPER_SPEED_DEFAULT),
+                voltage_gain=float(GAIN_DEFAULT),
+            )
+            signals: dict[str, np.ndarray] = stenhede_result["signals"]
+            # fs efetivo do Stenhede (target_num_samples / duracao)
+            sampling_rate = int(round(stenhede_result["sampling_rate_hz"]))
+            quality_flags["segmenter"] = "stenhede_full"
+            quality_flags["stenhede_match"] = stenhede_result["match"]
+            quality_flags["stenhede_n_lines"] = stenhede_result["n_lines_detected"]
+            quality_flags["leads_extracted"] = sum(
+                1 for k in signals if k != "II_rhythm" and not k.endswith("_long")
+            )
+        except Exception as e:
+            # Fallback: caminho cell-by-cell (também usa Stenhede mas
+            # respeita as bandas/baseline do lead_separator).
+            logger.warning(
+                "Stenhede FULL falhou (%s: %s) — fallback cell-by-cell",
+                type(e).__name__, e,
+            )
+            from .lead_separator import separate_and_extract
+            from .stenhede_adapter import (
+                extract_signal_probabilities,
+                signal_prob_to_binary_mask,
+            )
+            try:
+                signal_prob = extract_signal_probabilities(normalized)
+                lead_mask = signal_prob_to_binary_mask(signal_prob, threshold=0.1)
+                cal_dict = (
+                    calibration
+                    if isinstance(calibration, dict)
+                    else {
+                        "px_per_mm": calibrated_px_per_mm,
+                        "uv_per_pixel": 1000.0 / (calibrated_px_per_mm * GAIN_DEFAULT),
+                        "sampling_rate_hz": float(sampling_rate),
+                    }
+                )
+                sep = separate_and_extract(
+                    mask=lead_mask,
+                    normalized_image=normalized,
+                    calibration=cal_dict,
+                    signal_prob=signal_prob,
+                )
+                signals = {n: i["signal_uv"] for n, i in sep["leads"].items()}
+                quality_flags["segmenter"] = (
+                    f"stenhede_cellbycell_after_{type(e).__name__}"
+                )
+                quality_flags["lead_pixels"] = int(np.sum(lead_mask > 0))
+                quality_flags["leads_extracted"] = sum(
+                    1 for k in signals if k != "II_rhythm" and not k.endswith("_long")
+                )
+            except Exception as e2:
+                # Último fallback: extrator legado puro
+                logger.warning(
+                    "Stenhede cell-by-cell tambem falhou (%s: %s) — "
+                    "fallback ao extrator legado", type(e2).__name__, e2,
+                )
+                if self.use_mock:
+                    lead_mask = self.leader_mock(normalized)
+                else:
+                    lead_mask = self.leader(normalized)
+                signals_legacy, extraction_info = self.extract_signals(
+                    lead_mask, calibrated_px_per_mm
+                )
+                quality_flags.update(extraction_info)
+                quality_flags["segmenter"] = (
+                    f"legacy_fallback_after_{type(e).__name__}_{type(e2).__name__}"
+                )
+                signals = signals_legacy
+
+        # Compat com extrator legado: alias II_long ←→ II_rhythm
+        if "II_rhythm" in signals and f"{RHYTHM_LEAD}_long" not in signals:
+            signals[f"{RHYTHM_LEAD}_long"] = signals["II_rhythm"]
+
         if sampling_rate < 50:
             sampling_rate = SAMPLING_RATE  # fallback seguro
 
         return {
             "signals": signals,
             "sampling_rate": sampling_rate,
-            "px_per_mm": grid_info["px_per_mm"],
+            "px_per_mm": calibrated_px_per_mm,
             "grid_shape": grid_info["shape"],
             "quality_flags": quality_flags,
         }

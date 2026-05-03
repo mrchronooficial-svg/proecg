@@ -610,6 +610,138 @@ def _check_cardiac_tamponade(m: dict) -> list[Finding]:
 # Função principal
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Grupo D — Supra ST por território (IAMCSST), Infra ST, Sobrecargas
+# ---------------------------------------------------------------------------
+
+ST_TERRITORIES = {
+    "anterior":  ("V1", "V2", "V3", "V4"),
+    "inferior":  ("DII", "DIII", "aVF"),
+    "lateral":   ("DI", "aVL", "V5", "V6"),
+    "septal":    ("V1", "V2"),
+    "posterior": ("V7", "V8", "V9"),  # raramente disponíveis
+}
+
+
+def _check_st_elevation_territory(m: dict) -> list[Finding]:
+    """Supra ST por território = IAMCSST.
+
+    Critério: pelo menos 2 derivações contíguas do mesmo território com
+    supra significativo (≥1mm membros / ≥2mm em V1-V3).
+    """
+    leads = m.get("leads", {})
+    if not leads:
+        return []
+
+    findings: list[Finding] = []
+    for territory, lead_names in ST_TERRITORIES.items():
+        elevated: list[str] = []
+        for ln in lead_names:
+            lead = _get_lead(leads, ln)
+            st_elev = lead.get("st_elevation", 0)
+            thr = 2.0 if ln in ("V1", "V2", "V3") else 1.0
+            if st_elev >= thr:
+                elevated.append(ln)
+        if len(elevated) >= 2:
+            code = f"STEMI_{territory.upper()}"
+            findings.append(_finding(
+                code,
+                f"Supradesnivelamento de ST em parede {territory} "
+                f"({', '.join(elevated)}) — sugestivo de IAMCSST",
+                leads_affected=elevated,
+            ))
+    return findings
+
+
+def _check_st_depression_global(m: dict) -> list[Finding]:
+    """Infradesnivelamento de ST > 0.5mm em ≥ 2 derivações = isquemia subendocárdica."""
+    leads = m.get("leads", {})
+    if not leads:
+        return []
+    depressed = [
+        name for name in ALL_LEADS
+        if _get_lead(leads, name).get("st_depression", 0) >= 0.5
+    ]
+    if len(depressed) >= 2:
+        return [_finding(
+            "ST_DEPRESSION",
+            f"Infradesnivelamento de ST em {', '.join(depressed)} — "
+            "sugestivo de isquemia subendocárdica",
+            leads_affected=depressed,
+        )]
+    return []
+
+
+def _check_lvh_sokolow(m: dict) -> list[Finding]:
+    """Sobrecarga ventricular esquerda (SVE) — critério de Sokolow-Lyon:
+    S(V1) + R(V5 ou V6) > 35mm. Critério clássico, amplamente usado.
+    """
+    leads = m.get("leads", {})
+    if not leads:
+        return []
+    s_v1 = _get_lead(leads, "V1").get("s_amplitude_mm", 0)
+    r_v5 = _get_lead(leads, "V5").get("r_amplitude_mm", 0)
+    r_v6 = _get_lead(leads, "V6").get("r_amplitude_mm", 0)
+    sokolow = s_v1 + max(r_v5, r_v6)
+    if sokolow > 35.0:
+        return [_finding(
+            "LVH_SOKOLOW",
+            f"Sobrecarga ventricular esquerda (Sokolow-Lyon = {sokolow:.0f} mm > 35 mm)",
+            leads_affected=["V1", "V5", "V6"],
+        )]
+    return []
+
+
+def _check_rvh(m: dict) -> list[Finding]:
+    """Sobrecarga ventricular direita (SVD) — R/S > 1 em V1."""
+    rs_v1 = m.get("r_s_ratio_v1")
+    if rs_v1 is not None and rs_v1 > 1.0:
+        return [_finding(
+            "RVH",
+            f"Sobrecarga ventricular direita (R/S em V1 = {rs_v1:.2f} > 1)",
+            leads_affected=["V1"],
+        )]
+    return []
+
+
+def _check_lae(m: dict) -> list[Finding]:
+    """Sobrecarga atrial esquerda (SAE) — P bifásica em V1 com componente
+    negativo > 1mm × 1mm (= 40ms × 100µV).
+    """
+    if m.get("p_bifasic_v1", False):
+        return [_finding(
+            "LAE",
+            "Sobrecarga atrial esquerda (P bifásica em V1 com componente negativo proeminente)",
+            leads_affected=["V1"],
+        )]
+    return []
+
+
+def _check_rae(m: dict) -> list[Finding]:
+    """Sobrecarga atrial direita (SAD) — P apiculada > 2.5mm em DII."""
+    leads = m.get("leads", {})
+    p_amp_dii = _get_lead(leads, "DII").get("p_wave_amplitude", 0)
+    if p_amp_dii is not None and p_amp_dii > 2.5:
+        return [_finding(
+            "RAE",
+            f"Sobrecarga atrial direita (P em DII = {p_amp_dii:.1f} mm > 2.5 mm)",
+            leads_affected=["DII"],
+        )]
+    # Fallback: usa amplitude global de P (computada em DII no measure)
+    p_amp_global = m.get("p_wave_amplitude")
+    if p_amp_global is not None and p_amp_global / 100.0 > 2.5:
+        return [_finding(
+            "RAE",
+            f"Sobrecarga atrial direita (P em DII = {p_amp_global / 100.0:.1f} mm > 2.5 mm)",
+            leads_affected=["DII"],
+        )]
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Função principal
+# ---------------------------------------------------------------------------
+
 ALL_RULES = [
     _check_heart_rate,
     _check_axis,
@@ -627,26 +759,46 @@ ALL_RULES = [
     _check_hypokalemia,
     _check_pericarditis,
     _check_cardiac_tamponade,
+    # Supra/Infra ST
+    _check_st_elevation_territory,
+    _check_st_depression_global,
+    # Sobrecargas
+    _check_lvh_sokolow,
+    _check_rvh,
+    _check_lae,
+    _check_rae,
 ]
 
 
 def apply_clinical_rules(measurements: dict) -> list[dict]:
     """Aplica todas as regras clínicas às medições do ECG.
 
+    Aceita tanto o formato legacy (campos planos) quanto o formato novo
+    estruturado (heart_rate como dict, intervals nested, etc.) — converte
+    automaticamente.
+
     Args:
-        measurements: dicionário com medições e morfologia por derivação.
-            Campos esperados documentados no cabeçalho deste módulo.
+        measurements: medições do ECG. Pode estar em formato:
+          - Legacy: {heart_rate: float, axis: float, pr_interval: float, ...}
+          - Novo:   {heart_rate: {mean_bpm: float}, intervals: {pr_ms}, ...}
 
     Returns:
-        Lista de achados (dicts), cada um com:
-            - code (str): identificador da regra
-            - description (str): descrição clínica em português
-            - source (str): sempre "rules"
-            - leads_affected (list[str]): derivações envolvidas
+        Lista de achados (dicts) com code, description, source, leads_affected.
     """
+    # Auto-detect: se heart_rate é dict, está no formato novo → converte
+    if isinstance(measurements.get("heart_rate"), dict):
+        from .measure import to_legacy_format
+        measurements = to_legacy_format(measurements)
+
     findings: list[dict] = []
     for rule_fn in ALL_RULES:
-        findings.extend(rule_fn(measurements))
+        try:
+            findings.extend(rule_fn(measurements))
+        except Exception as e:  # defensive — não derruba o pipeline inteiro
+            import logging
+            logging.getLogger(__name__).warning(
+                "Regra %s falhou: %s: %s", rule_fn.__name__, type(e).__name__, e,
+            )
     return findings
 
 

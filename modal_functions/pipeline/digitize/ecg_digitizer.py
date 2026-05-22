@@ -31,7 +31,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import label as ndlabel
 from scipy.signal import medfilt
 
-from .format_detector import detect_layout
+# from .format_detector import detect_layout  # DESATIVADO — layout vem do LeadIdentifier do Stenhede
 from .constants import (
     GAIN_DEFAULT,
     GRID_MAJOR_MM,
@@ -50,6 +50,11 @@ logger = logging.getLogger(__name__)
 
 PATCH_SIZE = 256             # tamanho de patch para UNet (Dotter/Leader)
 PATCH_OVERLAP = 32           # sobreposição entre patches
+
+# Margem de seguranca do crop por perspectiva: expande os 4 cantos detectados
+# pra fora do centroide por essa fracao, evitando perder bordas do papel.
+# (approxPolyDP tende a encolher o quadrilatero pra dentro do papel real)
+CROP_SAFETY_MARGIN_FRAC = 0.06
 
 # Layout 3×4+1 (padrão brasileiro mais comum)
 LEAD_LAYOUT_3x4 = [
@@ -210,35 +215,21 @@ class ECGDigitizer:
                 len(keypoints), min_kp_for_undistort,
             )
 
-        # 4.5. Format detector — detecta layout (rows × cols + rhythm leads).
-        layout = detect_layout(normalized, grid_info["px_per_mm"])
-        quality_flags["layout"] = {
-            "format": layout["format"],
-            "n_rows": layout["n_rows"],
-            "n_cols": layout["n_cols"],
-            "n_rhythm": layout["n_rhythm"],
-            "fallback": layout.get("fallback", False),
-        }
+        # 4.5. Format detector — DESATIVADO. Layout agora é decidido pelo
+        # LeadIdentifier do Stenhede (extract_signals_stenhede). Esse passo
+        # rodava nosso detect_layout(), mas o resultado era apenas telemetria.
+        quality_flags["layout"] = {"source": "deferred_to_stenhede_lead_identifier"}
 
-        # 4.6. Calibrador — escala física (px/mm, ganho, sampling rate, µV/px)
-        # Usa a matriz do Gridder + imagem normalizada pra calcular escala
-        # horizontal e vertical separadamente; opcionalmente valida com o
-        # pulso de calibração de 1 mV.
-        try:
-            from .calibrator import calibrate
-            calibration = calibrate(
-                grid_matrix=grid_matrix,
-                normalized_image=normalized,
-                n_lead_bands=layout.get("n_rows", 3),
-            )
-            quality_flags["calibration"] = calibration
-            calibrated_px_per_mm = calibration["px_per_mm"]
-            sampling_rate = int(round(calibration["sampling_rate_hz"]))
-        except Exception as e:
-            logger.warning("Calibrador falhou (%s) — fallback px_per_mm do Gridder", e)
-            quality_flags["calibration"] = {"error": f"{type(e).__name__}: {e}"}
-            calibrated_px_per_mm = grid_info["px_per_mm"]
-            sampling_rate = int(round(calibrated_px_per_mm * PAPER_SPEED_DEFAULT))
+        # 4.6. Calibrador — DESATIVADO. O px/mm calculado aqui era descartado
+        # — o PixelSizeFinder do Stenhede (use_internal_pixel_size=True) é
+        # quem define o px/mm efetivo no extract_signals_stenhede.
+        # from .calibrator import calibrate  # DESATIVADO
+        quality_flags["calibration"] = {
+            "status": "skipped_uses_stenhede_pixel_size_finder"
+        }
+        calibrated_px_per_mm = grid_info["px_per_mm"]
+        sampling_rate = int(round(calibrated_px_per_mm * PAPER_SPEED_DEFAULT))
+        calibration = None  # marker — nenhum cal_dict do nosso calibrator
 
         # 5. Segmentação + extração FULL Stenhede (end-to-end)
         # ----------------------------------------------------------------
@@ -385,7 +376,8 @@ class ECGDigitizer:
             if area < min_area:
                 continue
             peri = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            # Epsilon menor (0.01 vs 0.02) -> cantos mais proximos da borda real
+            approx = cv2.approxPolyDP(cnt, 0.01 * peri, True)
             if len(approx) == 4 and area > best_area:
                 best_area = area
                 best_rect = approx
@@ -394,13 +386,24 @@ class ECGDigitizer:
             pts = best_rect.reshape(4, 2).astype(np.float32)
             pts = self._order_points(pts)
 
+            # Expandir os 4 cantos pra FORA do centroide por CROP_SAFETY_MARGIN_FRAC.
+            # Isso compensa o approxPolyDP encolher pra dentro do papel real e
+            # garante que nao perdemos tracado nas bordas. Clampar pra nao
+            # sair da foto.
+            center = pts.mean(axis=0)
+            pts_expanded = (
+                center + (pts - center) * (1.0 + CROP_SAFETY_MARGIN_FRAC)
+            ).astype(np.float32)
+            pts_expanded[:, 0] = np.clip(pts_expanded[:, 0], 0, w - 1)
+            pts_expanded[:, 1] = np.clip(pts_expanded[:, 1], 0, h - 1)
+
             dst_w = int(max(
-                np.linalg.norm(pts[1] - pts[0]),
-                np.linalg.norm(pts[2] - pts[3]),
+                np.linalg.norm(pts_expanded[1] - pts_expanded[0]),
+                np.linalg.norm(pts_expanded[2] - pts_expanded[3]),
             ))
             dst_h = int(max(
-                np.linalg.norm(pts[3] - pts[0]),
-                np.linalg.norm(pts[2] - pts[1]),
+                np.linalg.norm(pts_expanded[3] - pts_expanded[0]),
+                np.linalg.norm(pts_expanded[2] - pts_expanded[1]),
             ))
 
             if dst_w > 100 and dst_h > 100:
@@ -408,22 +411,25 @@ class ECGDigitizer:
                     [0, 0], [dst_w - 1, 0],
                     [dst_w - 1, dst_h - 1], [0, dst_h - 1],
                 ])
-                M = cv2.getPerspectiveTransform(pts, dst)
+                M = cv2.getPerspectiveTransform(pts_expanded, dst)
                 warped = cv2.warpPerspective(img, M, (dst_w, dst_h))
                 info["method"] = "perspective"
                 info["crop_size"] = (dst_w, dst_h)
-                logger.info("Pré-proc: perspectiva %dx%d → %dx%d",
-                            w, h, dst_w, dst_h)
+                info["safety_margin_frac"] = CROP_SAFETY_MARGIN_FRAC
+                info["pts_detected"] = pts.tolist()
+                info["pts_expanded"] = pts_expanded.tolist()
+                logger.info(
+                    "Pré-proc: perspectiva %dx%d → %dx%d (margem +%.0f%%)",
+                    w, h, dst_w, dst_h, CROP_SAFETY_MARGIN_FRAC * 100,
+                )
                 return warped, info
 
-        # Fallback: crop de margens (5%)
-        mx = int(w * 0.05)
-        my = int(h * 0.05)
-        cropped = img[my:h - my, mx:w - mx]
-        info["method"] = "margin_crop"
-        info["crop_size"] = (cropped.shape[1], cropped.shape[0])
-        logger.info("Pré-proc: fallback margin crop")
-        return cropped, info
+        # Fallback: nenhum retangulo detectado -> usar imagem inteira sem
+        # cortar (preserva todo o tracado; gridder/dotter lidam com o resto).
+        info["method"] = "no_crop_fallback"
+        info["crop_size"] = (w, h)
+        logger.info("Pré-proc: fallback sem crop (imagem inteira %dx%d)", w, h)
+        return img.copy(), info
 
     @staticmethod
     def _order_points(pts: np.ndarray) -> np.ndarray:

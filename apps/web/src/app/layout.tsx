@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Geist, Geist_Mono } from "next/font/google";
 
 import "../index.css";
 import Header from "@/components/header";
@@ -7,6 +7,16 @@ import Providers from "@/components/providers";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
+  subsets: ["latin"],
+});
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -23,7 +33,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning className="scroll-smooth">
-      <body className={`${jakarta.variable} antialiased bg-background`}>
+      <body
+        className={`${jakarta.variable} ${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
+      >
         <Providers>
           <div className="grid grid-rows-[auto_1fr] min-h-svh">
             <Header />

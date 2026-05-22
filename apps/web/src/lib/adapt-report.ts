@@ -1,0 +1,180 @@
+import type { EcgReport as ApiEcgReport } from "@proecg/api/lib/modal";
+
+import type {
+  ArrhythmiaResult,
+  ArrhythmiaUrgency,
+  EcgReport,
+  IschemiaResult,
+  RedFlag,
+} from "@/types/result";
+
+const ISCHEMIA_KEYWORDS = [
+  "supra de st",
+  "supra st",
+  "stemi",
+  "infra de st",
+  "infra st",
+  "sca",
+  "sindrome coronariana",
+  "síndrome coronariana",
+  "wellens",
+  "winter",
+  "sgarbossa",
+  "isquemia",
+  "infarto",
+];
+
+const ARRHYTHMIA_PATTERNS: Array<{
+  re: RegExp;
+  name: string;
+  urgency: ArrhythmiaUrgency;
+  urgencyMessage: string;
+}> = [
+  {
+    re: /(taquicardia ventricular|\btv\b|tv mono|tv poli|torsades)/i,
+    name: "Taquicardia ventricular",
+    urgency: "emergency",
+    urgencyMessage:
+      "Emergência — TV sustentada. Considerar cardioversão.",
+  },
+  {
+    re: /bav (total|3|3°|3º|completo)/i,
+    name: "BAV total (3° grau)",
+    urgency: "emergency",
+    urgencyMessage: "Emergência — bradicardia grave. Considerar marcapasso.",
+  },
+  {
+    re: /(fibrilação atrial|fibrilacao atrial|\bfa\b)/i,
+    name: "Fibrilação atrial",
+    urgency: "warning",
+    urgencyMessage:
+      "Atenção — considerar controle de frequência e anticoagulação.",
+  },
+  {
+    re: /flutter atrial/i,
+    name: "Flutter atrial",
+    urgency: "warning",
+    urgencyMessage:
+      "Atenção — considerar controle de frequência e anticoagulação.",
+  },
+  {
+    re: /taquicardia supraventricular|\btsv\b/i,
+    name: "Taquicardia supraventricular",
+    urgency: "warning",
+    urgencyMessage: "Atenção — considerar manobras vagais ou adenosina.",
+  },
+  {
+    re: /bav (2|2°|2º|mobitz)/i,
+    name: "BAV de 2° grau",
+    urgency: "warning",
+    urgencyMessage: "Atenção — monitorização contínua.",
+  },
+  { re: /bav (1|1°|1º)/i, name: "BAV de 1° grau", urgency: "info", urgencyMessage: null as unknown as string },
+  { re: /wpw|wolff-parkinson/i, name: "Wolff-Parkinson-White (WPW)", urgency: "info", urgencyMessage: null as unknown as string },
+  {
+    re: /bradicardia/i,
+    name: "Bradicardia sinusal",
+    urgency: "info",
+    urgencyMessage: null as unknown as string,
+  },
+];
+
+function detectIschemia(api: ApiEcgReport): IschemiaResult {
+  const findingsText = [
+    ...api.findings.map((f) => f.description),
+    ...api.diagnoses.map((d) => d.description),
+    ...api.redFlags.map((r) => r.description),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const matchedKeywords = ISCHEMIA_KEYWORDS.filter((k) =>
+    findingsText.includes(k),
+  );
+  const detected = matchedKeywords.length > 0;
+  // probabilidade heurística: número de keywords casadas (cap em 95%)
+  const probability = detected
+    ? Math.min(95, 60 + matchedKeywords.length * 8)
+    : 5;
+
+  // tenta extrair primeiro diagnóstico de isquemia da lista de diagnoses
+  const ischemiaDiagnosis =
+    api.diagnoses.find((d) =>
+      ISCHEMIA_KEYWORDS.some((k) => d.description.toLowerCase().includes(k)),
+    ) ?? null;
+
+  return {
+    probability,
+    detected,
+    diagnosis: ischemiaDiagnosis?.description ?? null,
+    wall: null,
+    leads: null,
+    artery: null,
+  };
+}
+
+function detectArrhythmia(api: ApiEcgReport): ArrhythmiaResult {
+  const text = [
+    api.measurements.rhythm ?? "",
+    ...api.findings.map((f) => f.description),
+    ...api.diagnoses.map((d) => d.description),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  for (const p of ARRHYTHMIA_PATTERNS) {
+    if (p.re.test(text)) {
+      const characteristics = api.findings
+        .filter((f) => p.re.test(f.description.toLowerCase()))
+        .map((f) => f.description);
+      return {
+        detected: true,
+        name: p.name,
+        location: null,
+        characteristics,
+        urgency: p.urgency,
+        urgencyMessage: p.urgencyMessage || null,
+      };
+    }
+  }
+
+  return {
+    detected: false,
+    name: null,
+    location: null,
+    characteristics: [],
+    urgency: null,
+    urgencyMessage: null,
+  };
+}
+
+function adaptRedFlags(api: ApiEcgReport): RedFlag[] {
+  return api.redFlags.map((rf) => ({
+    type: "danger" as const,
+    title: "ALERTA",
+    message: rf.description,
+    suggestion: rf.leads_affected?.length
+      ? `Derivações: ${rf.leads_affected.join(", ")}`
+      : "Correlacionar com dados clínicos.",
+  }));
+}
+
+/**
+ * Converte `EcgReport` da tRPC (camelCased) para o shape novo focado em
+ * Isquemia + Arritmia. Heurísticas usadas porque o backend ainda não
+ * retorna esses campos diretamente.
+ */
+export function adaptApiReport(
+  api: ApiEcgReport,
+  meta: { id: string; createdAt: Date; imageUrl: string },
+): EcgReport {
+  return {
+    id: meta.id,
+    createdAt: meta.createdAt,
+    imageUrl: meta.imageUrl,
+    ischemia: detectIschemia(api),
+    arrhythmia: detectArrhythmia(api),
+    redFlags: adaptRedFlags(api),
+    reportText: api.reportText,
+  };
+}

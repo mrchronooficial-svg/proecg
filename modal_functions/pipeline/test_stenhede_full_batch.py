@@ -51,6 +51,7 @@ def _safe_stem(p: Path) -> str:
 
 
 def _calibrate(img: np.ndarray) -> dict | None:
+    """Mantido pra compat — não é usado no caminho 100% Stenhede (Versão A)."""
     digitizer = ECGDigitizer(use_mock=False)
     _, kps = digitizer.dotter(img)
     if len(kps) < 4:
@@ -89,18 +90,17 @@ def _render_overlay(
 
 
 def _process_one(image_path: Path) -> tuple[str, str]:
-    """Devolve (status, mensagem) para uma imagem."""
+    """Pipeline 100% Stenhede (Versão A): U-Net + PixelSizeFinder +
+    SignalExtractor + LeadIdentifier. Sem cropper, sem o nosso calibrator."""
     img = cv2.imread(str(image_path))
     if img is None:
         return "ERRO", f"falha ao ler ({image_path.name})"
 
-    cal = _calibrate(img)
-    if cal is None:
-        return "FAIL_CAL", "calibracao falhou (poucos keypoints?)"
-
     try:
         result = extract_signals_stenhede(
-            image_bgr=img, px_per_mm=float(cal["px_per_mm"]),
+            image_bgr=img,
+            use_cropper=False,
+            use_internal_pixel_size=True,
         )
     except Exception as e:
         return "FAIL_STENHEDE", f"{type(e).__name__}: {e}"
@@ -109,13 +109,15 @@ def _process_one(image_path: Path) -> tuple[str, str]:
     n_lines = result.get("n_lines_detected", 0)
     layout = result["match"].get("layout", "?")
     cost = result["match"].get("cost", float("nan"))
+    pxmm = result.get("avg_pixel_per_mm", float("nan"))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     safe = _safe_stem(image_path)
     out_path = OUT_DIR / f"{safe}_overlay_stenhede_full.png"
     title = (
-        f"{image_path.name} -- Overlay FULL Stenhede "
-        f"(layout={layout}, cost={cost:.2f}, lines={n_lines})"
+        f"{image_path.name} -- 100% Stenhede "
+        f"(layout={layout}, cost={cost:.2f}, lines={n_lines}, "
+        f"px/mm={pxmm:.2f})"
     )
     try:
         _render_overlay(img, raw_lines, title, out_path)
@@ -124,7 +126,7 @@ def _process_one(image_path: Path) -> tuple[str, str]:
 
     return "OK", (
         f"layout={layout} cost={cost:.2f} lines={n_lines} "
-        f"file={out_path.name}"
+        f"px/mm={pxmm:.2f} file={out_path.name}"
     )
 
 

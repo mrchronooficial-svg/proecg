@@ -16,5 +16,6 @@ model EcgAnalysis {
   expiresAt  DateTime
 
   @@index([userId])
+  @@index([expiresAt])
   @@map("ecg_analysis")
 }

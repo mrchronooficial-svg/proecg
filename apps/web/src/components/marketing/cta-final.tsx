@@ -5,29 +5,29 @@ import { Reveal } from "./reveal";
 
 export function CTAFinal() {
   return (
-    <section className="bg-[#122056] px-4 py-20 sm:py-24">
-      <div className="mx-auto max-w-[600px] text-center">
+    <section
+      className="relative overflow-hidden py-20 text-white sm:py-32 lg:py-40"
+      style={{
+        backgroundImage:
+          "radial-gradient(50% 70% at 50% 50%, rgba(0,102,204,0.35), transparent 60%), linear-gradient(180deg, #0c1330 0%, #1a1a3e 100%)",
+      }}
+    >
+      <div className="mx-auto max-w-4xl px-6 text-center">
         <Reveal>
-          <h2 className="text-3xl font-bold text-white sm:text-4xl">
-            O próximo ECG não precisa te deixar em dúvida.
+          <h2 className="text-[30px] font-bold leading-[1.1] tracking-[-0.02em] break-words sm:text-[48px] lg:text-[68px]">
+            Comece a usar o ProECG agora.
           </h2>
-        </Reveal>
-        <Reveal delay={0.1}>
-          <p className="mt-4 text-lg text-white/80">
-            Comece agora e tenha um cardiologista de IA no bolso do jaleco.
+          <p className="mx-auto mt-5 max-w-2xl text-[15px] leading-[1.5] text-white/70 sm:mt-6 sm:text-[18px] lg:text-[20px]">
+            Junte-se a médicos que já confiam na IA para apoio diagnóstico em cardiologia.
           </p>
-        </Reveal>
-        <Reveal delay={0.2}>
-          <div className="mt-8 flex flex-col items-center gap-3">
+          <div className="mt-8 flex flex-col items-stretch gap-3 sm:mt-10 sm:items-center sm:gap-4">
             <Link
               href="/login"
-              className="rounded-xl bg-white px-10 py-4 text-lg font-semibold text-[#5B65DC] transition-all hover:bg-gray-100 hover:-translate-y-0.5"
+              className="block w-full rounded-full bg-white px-6 py-3.5 text-center text-[16px] font-semibold text-[#1d1d1f] shadow-[0_8px_20px_-10px_rgba(255,255,255,0.4)] transition-transform hover:scale-[1.02] sm:inline-block sm:w-auto sm:px-9 sm:py-4 sm:text-[16px] sm:shadow-[0_20px_40px_-15px_rgba(255,255,255,0.4)]"
             >
-              Assinar o ProECG
+              Criar conta gratuita
             </Link>
-            <p className="text-sm text-white/60">
-              A partir de R$ 197/mês · Pix ou cartão · Acesso imediato
-            </p>
+            <p className="text-[12px] text-white/55 sm:text-[13px]">Sem cartão de crédito para teste.</p>
           </div>
         </Reveal>
       </div>

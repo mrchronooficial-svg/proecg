@@ -12,7 +12,11 @@ export default function Header() {
   const isDashboard = pathname.startsWith("/dashboard");
 
   // LP has its own navbar
-  if (pathname === "/" || pathname === "/v2") return null;
+  if (pathname === "/") return null;
+  // Dashboard has its own DashboardShell with custom header / sidebar
+  if (pathname.startsWith("/dashboard")) return null;
+  // Login has its own minimal layout (X button instead of header)
+  if (pathname === "/login") return null;
 
   return (
     <header className="sticky top-0 z-50 glass-strong h-14 grid grid-cols-3 items-center px-4">

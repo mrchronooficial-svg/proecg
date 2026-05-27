@@ -14,9 +14,9 @@ const features = [
 ];
 
 const plans = [
-  { name: "Mensal", price: 267, period: "/mês", note: "Cobrança mensal", popular: false, save: null },
-  { name: "Semestral", price: 227, period: "/mês", note: "Cobrança semestral", popular: false, save: "Economize 15%" },
-  { name: "Anual", price: 197, period: "/mês", note: "Cobrança anual", popular: true, save: "Economize 26%" },
+  { id: "MONTHLY", name: "Mensal", price: 267, period: "/mês", note: "Cobrança mensal", popular: false, save: null },
+  { id: "SEMI", name: "Semestral", price: 227, period: "/mês", note: "Cobrança semestral", popular: false, save: "Economize 15%" },
+  { id: "ANNUAL", name: "Anual", price: 197, period: "/mês", note: "Cobrança anual", popular: true, save: "Economize 26%" },
 ];
 
 export function Pricing() {
@@ -65,7 +65,7 @@ export function Pricing() {
                 <div className="mt-1.5 text-[12px] text-[#86868b]">{p.note}</div>
 
                 <Link
-                  href="/assinar"
+                  href={`/signup?plan=${p.id}`}
                   className={`mt-6 block w-full rounded-full px-6 py-3 text-center text-[15px] font-semibold transition-colors sm:mt-8 sm:py-3 sm:text-[14px] sm:font-medium ${
                     p.popular
                       ? "bg-[#0066CC] text-white hover:bg-[#0055aa]"

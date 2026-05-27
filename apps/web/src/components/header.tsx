@@ -17,6 +17,9 @@ export default function Header() {
   if (pathname.startsWith("/dashboard")) return null;
   // Login has its own minimal layout (X button instead of header)
   if (pathname === "/login") return null;
+  // Fluxo de checkout (signup/profile/checkout/success) é fullscreen, sem header
+  if (pathname.startsWith("/signup") || pathname.startsWith("/checkout"))
+    return null;
 
   return (
     <header className="sticky top-0 z-50 glass-strong h-14 grid grid-cols-3 items-center px-4">

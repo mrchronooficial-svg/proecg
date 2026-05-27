@@ -111,22 +111,18 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
 
   return (
     <div className="w-full max-w-[400px]">
-      <h1 className="mb-10 text-center text-[28px] font-bold tracking-[-0.02em] leading-[1.1] text-apple-accent">
-        ProECG
+      <h1 className="mb-10 text-center text-[34px] font-bold tracking-[-0.02em] leading-[1.1] text-white">
+        Pro<span className="text-[#0a84ff]">ECG</span>
       </h1>
 
       <button
         type="button"
         onClick={handleGoogleSignIn}
         disabled={googleLoading}
-        className="flex h-[52px] w-full items-center justify-center gap-3 rounded-[14px] border border-apple-border bg-white text-[16px] font-medium text-apple-text transition-all duration-200 hover:bg-apple-border-light hover:border-[#D1D1D6] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-accent focus-visible:ring-offset-2"
+        className="flex h-[52px] w-full items-center justify-center gap-3 rounded-full border border-white/15 bg-white/[0.04] text-[15px] font-medium text-white transition-all duration-200 hover:bg-white/10 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a84ff]"
       >
         {googleLoading ? (
-          <Loader2
-            size={20}
-            className="text-apple-text-secondary animate-spin"
-            aria-hidden="true"
-          />
+          <Loader2 size={20} className="animate-spin text-white/60" aria-hidden="true" />
         ) : (
           <GoogleIcon />
         )}
@@ -134,9 +130,9 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
       </button>
 
       <div className="my-6 flex items-center gap-4">
-        <div className="h-px flex-1 bg-apple-border" />
-        <span className="text-[14px] text-apple-text-secondary">ou</span>
-        <div className="h-px flex-1 bg-apple-border" />
+        <div className="h-px flex-1 bg-white/10" />
+        <span className="text-[13px] font-medium text-white/40">ou</span>
+        <div className="h-px flex-1 bg-white/10" />
       </div>
 
       <form
@@ -153,10 +149,10 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
             const fieldError = field.state.meta.errors[0]?.message;
             return (
               <div>
-                <div className="relative rounded-xl border border-apple-border bg-white transition-all duration-200 focus-within:border-apple-accent focus-within:ring-2 focus-within:ring-apple-accent/30">
+                <div className="relative rounded-2xl border border-white/12 bg-white/[0.04] transition-all duration-200 focus-within:border-[#0a84ff] focus-within:ring-2 focus-within:ring-[#0a84ff]/25">
                   <label
                     htmlFor={field.name}
-                    className="pointer-events-none absolute left-4 top-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-apple-text-secondary"
+                    className="pointer-events-none absolute left-5 top-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-white/45"
                   >
                     E-mail
                   </label>
@@ -170,13 +166,11 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     aria-invalid={!!fieldError}
-                    className="block h-[52px] w-full bg-transparent px-4 pt-6 pb-1 text-[16px] text-apple-text outline-none"
+                    className="block h-[56px] w-full bg-transparent px-5 pt-6 pb-1 text-[15px] text-white outline-none"
                   />
                 </div>
                 {fieldError && (
-                  <p className="mt-1.5 text-[13px] text-apple-danger">
-                    {fieldError}
-                  </p>
+                  <p className="mt-1.5 px-2 text-[13px] text-red-400">{fieldError}</p>
                 )}
               </div>
             );
@@ -188,10 +182,10 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
             const fieldError = field.state.meta.errors[0]?.message;
             return (
               <div>
-                <div className="relative rounded-xl border border-apple-border bg-white transition-all duration-200 focus-within:border-apple-accent focus-within:ring-2 focus-within:ring-apple-accent/30">
+                <div className="relative rounded-2xl border border-white/12 bg-white/[0.04] transition-all duration-200 focus-within:border-[#0a84ff] focus-within:ring-2 focus-within:ring-[#0a84ff]/25">
                   <label
                     htmlFor={field.name}
-                    className="pointer-events-none absolute left-4 top-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-apple-text-secondary"
+                    className="pointer-events-none absolute left-5 top-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-white/45"
                   >
                     Senha
                   </label>
@@ -204,15 +198,13 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     aria-invalid={!!fieldError}
-                    className="block h-[52px] w-full bg-transparent pl-4 pr-12 pt-6 pb-1 text-[16px] text-apple-text outline-none"
+                    className="block h-[56px] w-full bg-transparent pl-5 pr-12 pt-6 pb-1 text-[15px] text-white outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    aria-label={
-                      showPassword ? "Ocultar senha" : "Mostrar senha"
-                    }
-                    className="absolute right-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-apple-text-secondary transition-colors hover:text-apple-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-accent"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    className="absolute right-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-white/50 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a84ff]"
                   >
                     {showPassword ? (
                       <EyeOff size={18} strokeWidth={1.8} />
@@ -222,9 +214,7 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
                   </button>
                 </div>
                 {fieldError && (
-                  <p className="mt-1.5 text-[13px] text-apple-danger">
-                    {fieldError}
-                  </p>
+                  <p className="mt-1.5 px-2 text-[13px] text-red-400">{fieldError}</p>
                 )}
               </div>
             );
@@ -232,7 +222,7 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
         </form.Field>
 
         {authError && (
-          <div className="rounded-xl bg-[#FFF0F0] px-3 py-3 text-[14px] leading-[1.3] text-apple-danger">
+          <div className="rounded-xl bg-red-500/10 px-3 py-3 text-[14px] leading-[1.3] text-red-400">
             {authError}
           </div>
         )}
@@ -247,14 +237,10 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
             <button
               type="submit"
               disabled={!canSubmit || isSubmitting}
-              className="mt-2 flex h-[52px] w-full items-center justify-center rounded-[14px] bg-apple-text text-[16px] font-semibold text-white transition-all duration-200 hover:bg-[#2D2D2F] active:scale-[0.98] active:bg-black disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-accent focus-visible:ring-offset-2"
+              className="mt-2 flex h-[52px] w-full items-center justify-center rounded-full bg-[#0a84ff] text-[16px] font-semibold text-white transition-all duration-200 hover:bg-[#0066cc] active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a84ff] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             >
               {isSubmitting ? (
-                <Loader2
-                  size={20}
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
+                <Loader2 size={20} className="animate-spin" aria-hidden="true" />
               ) : (
                 "Entrar"
               )}
@@ -266,16 +252,16 @@ export default function SignInForm({ onSwitchToSignUp }: SignInFormProps) {
       <div className="mt-5 flex flex-col items-center gap-3">
         <Link
           href="/esqueci-senha"
-          className="text-[15px] font-normal text-apple-accent transition-opacity duration-200 hover:underline"
+          className="text-[15px] font-medium text-[#0a84ff] transition-opacity duration-200 hover:underline"
         >
           Redefinir senha
         </Link>
-        <p className="text-[15px] text-apple-text-secondary">
+        <p className="text-[15px] text-white/60">
           Não tem conta?{" "}
           <button
             type="button"
             onClick={onSwitchToSignUp}
-            className="font-medium text-apple-accent transition-opacity duration-200 hover:underline focus-visible:outline-none focus-visible:underline"
+            className="font-medium text-[#0a84ff] transition-opacity duration-200 hover:underline focus-visible:underline focus-visible:outline-none"
           >
             Crie uma
           </button>

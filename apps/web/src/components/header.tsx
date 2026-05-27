@@ -20,6 +20,9 @@ export default function Header() {
   // Fluxo de checkout (signup/profile/checkout/success) é fullscreen, sem header
   if (pathname.startsWith("/signup") || pathname.startsWith("/checkout"))
     return null;
+  // Fluxo de senha — fullscreen dark, sem header
+  if (pathname === "/esqueci-senha" || pathname === "/redefinir-senha")
+    return null;
 
   return (
     <header className="sticky top-0 z-50 glass-strong h-14 grid grid-cols-3 items-center px-4">

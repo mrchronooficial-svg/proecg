@@ -1,15 +1,13 @@
 "use client";
 
-import { Button } from "@proecg/ui/components/button";
-import { Card } from "@proecg/ui/components/card";
-import { Input } from "@proecg/ui/components/input";
-import { Label } from "@proecg/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { toast } from "sonner";
 import z from "zod";
 
+import { CheckoutShell } from "@/components/checkout/CheckoutShell";
+import { bareInput, FloatingField } from "@/components/checkout/FloatingField";
 import { authClient } from "@/lib/auth-client";
 
 function ResetForm() {
@@ -48,93 +46,105 @@ function ResetForm() {
     },
   });
 
-  if (!token) {
-    return (
-      <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
-        <Card className="glass shadow-lg max-w-md p-8 text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary">Link inválido</h1>
-          <p className="text-muted-foreground">
-            Este link de redefinição de senha é inválido ou expirou.
-          </p>
-        </Card>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-[calc(100svh-3.5rem)] flex items-center justify-center px-4">
-      <Card className="glass shadow-lg w-full max-w-md p-8">
-        <h1 className="mb-6 text-center text-2xl font-bold text-primary">
-          Redefinir senha
-        </h1>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="password">
-            {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor={field.name}>Nova senha</Label>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="password"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                />
-                {field.state.meta.errors.map((error) => (
-                  <p key={error?.message} className="text-sm text-red-500">
-                    {error?.message}
-                  </p>
-                ))}
+    <CheckoutShell>
+      <div className="flex min-h-svh items-center justify-center px-6 py-12">
+        <div className="w-full max-w-[440px]">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-8 backdrop-blur">
+            {!token ? (
+              <div className="text-center">
+                <h1 className="text-[26px] font-bold tracking-[-0.02em]">
+                  Link inválido
+                </h1>
+                <p className="mt-3 text-[15px] leading-[1.6] text-white/65">
+                  Este link de redefinição de senha é inválido ou expirou.
+                </p>
               </div>
-            )}
-          </form.Field>
+            ) : (
+              <>
+                <h1 className="mb-6 text-center text-[26px] font-bold tracking-[-0.02em]">
+                  Definir nova senha
+                </h1>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    form.handleSubmit();
+                  }}
+                  className="space-y-3"
+                >
+                  <form.Field name="password">
+                    {(field) => (
+                      <div>
+                        <FloatingField label="Nova senha">
+                          <input
+                            id={field.name}
+                            name={field.name}
+                            type="password"
+                            autoComplete="new-password"
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            placeholder="Mínimo 8 caracteres"
+                            className={bareInput}
+                          />
+                        </FloatingField>
+                        {field.state.meta.errors.map((error) => (
+                          <p key={error?.message} className="mt-1.5 px-2 text-[13px] text-red-400">
+                            {error?.message}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </form.Field>
 
-          <form.Field name="confirmPassword">
-            {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor={field.name}>Confirmar senha</Label>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="password"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                />
-                {field.state.meta.errors.map((error) => (
-                  <p key={error?.message} className="text-sm text-red-500">
-                    {error?.message}
-                  </p>
-                ))}
-              </div>
-            )}
-          </form.Field>
+                  <form.Field name="confirmPassword">
+                    {(field) => (
+                      <div>
+                        <FloatingField label="Confirmar senha">
+                          <input
+                            id={field.name}
+                            name={field.name}
+                            type="password"
+                            autoComplete="new-password"
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            placeholder="Repita a senha"
+                            className={bareInput}
+                          />
+                        </FloatingField>
+                        {field.state.meta.errors.map((error) => (
+                          <p key={error?.message} className="mt-1.5 px-2 text-[13px] text-red-400">
+                            {error?.message}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </form.Field>
 
-          <form.Subscribe
-            selector={(state) => ({
-              canSubmit: state.canSubmit,
-              isSubmitting: state.isSubmitting,
-            })}
-          >
-            {({ canSubmit, isSubmitting }) => (
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!canSubmit || isSubmitting}
-              >
-                {isSubmitting ? "Redefinindo..." : "Redefinir senha"}
-              </Button>
+                  <form.Subscribe
+                    selector={(state) => ({
+                      canSubmit: state.canSubmit,
+                      isSubmitting: state.isSubmitting,
+                    })}
+                  >
+                    {({ canSubmit, isSubmitting }) => (
+                      <button
+                        type="submit"
+                        disabled={!canSubmit || isSubmitting}
+                        className="w-full rounded-full bg-[#0a84ff] px-6 py-3.5 text-[16px] font-semibold text-white transition-all hover:bg-[#0066cc] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSubmitting ? "Redefinindo..." : "Definir senha"}
+                      </button>
+                    )}
+                  </form.Subscribe>
+                </form>
+              </>
             )}
-          </form.Subscribe>
-        </form>
-      </Card>
-    </main>
+          </div>
+        </div>
+      </div>
+    </CheckoutShell>
   );
 }
 

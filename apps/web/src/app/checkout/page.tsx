@@ -41,6 +41,21 @@ function maskCpf(v: string) {
     .replace(/(\d{3})(\d)/, "$1.$2")
     .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 }
+function maskCep(v: string) {
+  const d = onlyDigits(v).slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+function maskPhone(v: string) {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 10) {
+    return d
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d{1,4})$/, "$1-$2");
+  }
+  return d
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d{1,4})$/, "$1-$2");
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -53,6 +68,9 @@ export default function CheckoutPage() {
   const [expiry, setExpiry] = useState("");
   const [ccv, setCcv] = useState("");
   const [cpf, setCpf] = useState("");
+  const [cep, setCep] = useState("");
+  const [addressNumber, setAddressNumber] = useState("");
+  const [phone, setPhone] = useState("");
 
   const [pix, setPix] = useState<PixData | null>(null);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
@@ -121,10 +139,15 @@ export default function CheckoutPage() {
     if (!plan) return;
     const [mm, aa] = expiry.split("/");
     const cpfDigits = onlyDigits(cpf);
+    const cepDigits = onlyDigits(cep);
+    const phoneDigits = onlyDigits(phone);
     if (onlyDigits(cardNumber).length < 13) return toast.error("Número do cartão inválido.");
     if (!mm || !aa || aa.length !== 2) return toast.error("Validade inválida (MM/AA).");
     if (ccv.length < 3) return toast.error("CVV inválido.");
     if (cpfDigits.length !== 11) return toast.error("CPF inválido.");
+    if (cepDigits.length !== 8) return toast.error("CEP inválido (8 dígitos).");
+    if (!addressNumber.trim()) return toast.error("Informe o número do endereço.");
+    if (phoneDigits.length < 10) return toast.error("Telefone inválido (com DDD).");
 
     checkoutCard.mutate({
       plan: plan.id,
@@ -135,6 +158,9 @@ export default function CheckoutPage() {
         ccv,
       },
       cpf: cpfDigits,
+      postalCode: cepDigits,
+      addressNumber: addressNumber.trim(),
+      phone: phoneDigits,
     });
   }
 
@@ -220,6 +246,35 @@ export default function CheckoutPage() {
                         value={cpf}
                         onChange={(e) => setCpf(maskCpf(e.target.value))}
                         placeholder="000.000.000-00"
+                        className={bareInput}
+                      />
+                    </FloatingField>
+                    <div className="grid grid-cols-2 gap-3">
+                      <FloatingField label="CEP">
+                        <input
+                          inputMode="numeric"
+                          value={cep}
+                          onChange={(e) => setCep(maskCep(e.target.value))}
+                          placeholder="00000-000"
+                          className={bareInput}
+                        />
+                      </FloatingField>
+                      <FloatingField label="Número">
+                        <input
+                          inputMode="numeric"
+                          value={addressNumber}
+                          onChange={(e) => setAddressNumber(e.target.value)}
+                          placeholder="123"
+                          className={bareInput}
+                        />
+                      </FloatingField>
+                    </div>
+                    <FloatingField label="Telefone (com DDD)">
+                      <input
+                        inputMode="numeric"
+                        value={phone}
+                        onChange={(e) => setPhone(maskPhone(e.target.value))}
+                        placeholder="(11) 90000-0000"
                         className={bareInput}
                       />
                     </FloatingField>

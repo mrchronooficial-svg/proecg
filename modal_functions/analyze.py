@@ -51,6 +51,11 @@ ecg_image = (
         "fastapi[standard]",
         "anthropic>=0.40.0",
     )
+    # Pré-cacheia os modelos do EasyOCR (pt+en) no build da imagem
+    # pra eles não precisarem ser baixados em runtime.
+    .run_commands(
+        "python -c \"import easyocr; easyocr.Reader(['pt','en'], gpu=False, download_enabled=True)\"",
+    )
     # Código do pipeline numérico
     .add_local_dir("pipeline", remote_path="/root/pipeline")
     # Pesos dos modelos (Dotter, Leader, CNN v5b)

@@ -486,7 +486,15 @@ class ECGDigitizer:
                 state = checkpoint
             self._dotter_model.load_state_dict(state)
             self._dotter_model.eval()
-            logger.info("Dotter UNet carregado: %s", self.dotter_weights)
+            if torch.cuda.is_available():
+                self._dotter_model = self._dotter_model.cuda()
+                logger.info(
+                    "Dotter UNet carregado em GPU: %s", self.dotter_weights,
+                )
+            else:
+                logger.info(
+                    "Dotter UNet carregado em CPU: %s", self.dotter_weights,
+                )
 
         h, w = img.shape[:2]
         patches = self._extract_patches(img)

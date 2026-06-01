@@ -22,6 +22,11 @@ const ISCHEMIA_KEYWORDS = [
   "sgarbossa",
   "isquemia",
   "infarto",
+  // v5b — descrições da CNN
+  "supradesnivelamento",
+  "infradesnivelamento",
+  "infarto do miocárdio",
+  "isquemia subendocárdica",
 ];
 
 const ARRHYTHMIA_PATTERNS: Array<{
@@ -38,7 +43,7 @@ const ARRHYTHMIA_PATTERNS: Array<{
       "Emergência — TV sustentada. Considerar cardioversão.",
   },
   {
-    re: /bav (total|3|3°|3º|completo)/i,
+    re: /(bav (total|3|3°|3º|completo)|bloqueio atrioventricular total)/i,
     name: "BAV total (3° grau)",
     urgency: "emergency",
     urgencyMessage: "Emergência — bradicardia grave. Considerar marcapasso.",
@@ -64,16 +69,34 @@ const ARRHYTHMIA_PATTERNS: Array<{
     urgencyMessage: "Atenção — considerar manobras vagais ou adenosina.",
   },
   {
-    re: /bav (2|2°|2º|mobitz)/i,
+    re: /(bav (2|2°|2º|mobitz)|bloqueio atrioventricular de 2)/i,
     name: "BAV de 2° grau",
     urgency: "warning",
     urgencyMessage: "Atenção — monitorização contínua.",
   },
-  { re: /bav (1|1°|1º)/i, name: "BAV de 1° grau", urgency: "info", urgencyMessage: null as unknown as string },
+  { re: /(bav (1|1°|1º)|bloqueio atrioventricular de 1)/i, name: "BAV de 1° grau", urgency: "info", urgencyMessage: null as unknown as string },
   { re: /wpw|wolff-parkinson/i, name: "Wolff-Parkinson-White (WPW)", urgency: "info", urgencyMessage: null as unknown as string },
   {
     re: /bradicardia/i,
     name: "Bradicardia sinusal",
+    urgency: "info",
+    urgencyMessage: null as unknown as string,
+  },
+  {
+    re: /taquicardia sinusal/i,
+    name: "Taquicardia sinusal",
+    urgency: "info",
+    urgencyMessage: null as unknown as string,
+  },
+  {
+    re: /extrassy?stoles?\s*(supraventricul|atria)/i,
+    name: "Extrassístoles atriais",
+    urgency: "info",
+    urgencyMessage: null as unknown as string,
+  },
+  {
+    re: /extrassy?stoles?\s*ventricul/i,
+    name: "Extrassístoles ventriculares",
     urgency: "info",
     urgencyMessage: null as unknown as string,
   },

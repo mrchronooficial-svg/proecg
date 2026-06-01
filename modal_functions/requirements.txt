@@ -14,6 +14,9 @@ scikit-image>=0.21,<1
 # Open-ECG-Digitizer (vendor): LeadIdentifier carrega layouts de YAML
 PyYAML>=6.0,<7
 
+# pipeline_completo_v1 (plots intermediários backend=Agg)
+matplotlib>=3.7,<4
+
 # OCR (correção de orientação)
 easyocr>=1.7,<2
 

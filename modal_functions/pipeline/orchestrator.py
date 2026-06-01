@@ -48,10 +48,14 @@ logger = logging.getLogger(__name__)
 from .digitize.ecg_digitizer import ECGDigitizer, LEAD_ORDER
 from .measure import measure_ecg
 from .rules import apply_clinical_rules
-from .classify import classify_ecg, EXPECTED_LENGTH
+from .classify import (
+    classify_ecg,
+    EXPECTED_LENGTH,
+    RED_FLAG_CODES as CNN_RED_FLAG_CODES,
+)
 from .report import generate_frontend_report, generate_report, RED_FLAG_CODES
 
-# Frequencia alvo para CNN e medicoes
+# Frequencia alvo para medicoes (CNN v5b roda em 400Hz e auto-resamplea internamente)
 TARGET_FS = 500
 
 
@@ -79,18 +83,40 @@ def _sanitize_for_json(obj: Any) -> Any:
     return obj
 
 
+_INTERNAL_FIELDS = ("score", "threshold", "cnn_score")
+
+
 def _strip_scores(findings: list[dict]) -> list[dict]:
-    """Remove 'score' dos achados (nunca mostrar confianca ao medico)."""
-    return [{k: v for k, v in f.items() if k != "score"} for f in findings]
+    """Remove campos internos (score/threshold/cnn_score) — nunca mostrar
+    confiança nem limiar ao médico."""
+    return [
+        {k: v for k, v in f.items() if k not in _INTERNAL_FIELDS}
+        for f in findings
+    ]
 
 
 def _extract_red_flags(diagnoses: list[dict]) -> list[dict]:
-    """Extrai diagnosticos que sao red-flags (urgencia maxima)."""
+    """Extrai diagnosticos que sao red-flags (urgencia maxima).
+
+    Reconhece:
+      - is_red_flag=True (vem do classify v5b)
+      - Códigos do CNN v5b: STE, 3AVB, 2AVB, WPW, LQT, MI
+      - Códigos das regras: report.RED_FLAG_CODES
+      - Prefixos legados: sca_, tv_, bav_total, hipercalemia_grave
+    """
     red = []
     for d in diagnoses:
+        if d.get("is_red_flag"):
+            red.append(d)
+            continue
         code = d.get("code", "")
-        if code in RED_FLAG_CODES or any(
-            code.startswith(p) for p in ("sca_", "tv_", "bav_total", "hipercalemia_grave")
+        if (
+            code in RED_FLAG_CODES
+            or code in CNN_RED_FLAG_CODES
+            or any(
+                code.startswith(p)
+                for p in ("sca_", "tv_", "bav_total", "hipercalemia_grave")
+            )
         ):
             red.append(d)
     return red

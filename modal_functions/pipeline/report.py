@@ -39,6 +39,7 @@ RHYTHM_LABELS: dict[str, str] = {
 
 # Codigos de red-flag (urgencia maxima) -- aparecem primeiro no laudo
 RED_FLAG_CODES = {
+    # Legados (regras clínicas — manter)
     "sca_supra", "sca_com_supra",
     "SGARBOSSA_POSITIVE", "SMITH_MODIFIED_SGARBOSSA",
     "tv_mono", "tv_poli", "torsades",
@@ -47,14 +48,30 @@ RED_FLAG_CODES = {
     "CARDIAC_TAMPONADE",
     "BRUGADA_TYPE1",
     "fa_pre_excitada",
+    # Novos v5b (CNN)
+    "STE", "3AVB", "2AVB", "WPW", "LQT", "MI",
 }
 
 # Mapeamento CNN code -> rules code (para deduplicacao)
+# Para "STE" usamos lógica especial em _merge_findings (qualquer STEMI_* / SGARBOSSA).
 CNN_TO_RULE_MAP: dict[str, str] = {
+    # Legados (manter pra retrocompat)
     "bav1": "AVB_FIRST_DEGREE",
     "brd": "RBBB",
     "bre": "LBBB",
     "sca_supra": "SGARBOSSA_POSITIVE",
+    # Novos v5b → regras existentes
+    "1AVB": "AVB_FIRST_DEGREE",
+    "RBBB": "RBBB",
+    "LBBB": "LBBB",
+    "STE": "STEMI_ANTERIOR",  # sentinel — _merge_findings testa prefixo STEMI_/SGARBOSSA
+    "SB": "SEVERE_SINUS_BRADYCARDIA",
+    "STach": "TACHYCARDIA",
+    "LVH": "LVH_SOKOLOW",
+    "LAD": "LEFT_AXIS_DEVIATION",
+    "RAD": "RIGHT_AXIS_DEVIATION",
+    "LQT": "LONG_QT",
+    "WPW": "WPW",
 }
 
 # ------------------------------------------------------------------
@@ -187,12 +204,25 @@ def _merge_findings(
         mapped = CNN_TO_RULE_MAP.get(cnn_code)
         score = float(cnn_f.get("score", 0.0))
 
-        if mapped and mapped in rule_codes:
+        # Caso especial — "STE" da CNN bate com QUALQUER STEMI_* ou SGARBOSSA_*
+        # detectado pelas regras (que classificam por território).
+        confirmed_code: str | None = None
+        if cnn_code == "STE":
+            for rc in rule_codes:
+                if rc.startswith("STEMI_") or rc.startswith("SGARBOSSA") or rc == "SMITH_MODIFIED_SGARBOSSA":
+                    confirmed_code = rc
+                    break
+        elif mapped and mapped in rule_codes:
+            confirmed_code = mapped
+
+        if confirmed_code is not None:
             # Confirmação cruzada → marca o existente
             for m in merged:
-                if m["code"] == mapped:
+                if m["code"] == confirmed_code:
                     m["source"] = "cnn+rules"
                     m["cnn_score"] = score
+                    if cnn_f.get("is_red_flag"):
+                        m["is_red_flag"] = True
                     break
         else:
             merged.append({
@@ -202,6 +232,7 @@ def _merge_findings(
                 "leads_affected": cnn_f.get("leads_affected", []),
                 "confidence": round(score, 3),
                 "cnn_score": score,
+                "is_red_flag": bool(cnn_f.get("is_red_flag", False)),
             })
 
     return merged
@@ -292,6 +323,76 @@ def _derive_diagnoses(findings: list[dict]) -> list[dict]:
         ({"WPW"},
          "wpw",
          "Compativel com padrao de Wolf-Parkinson-White"),
+        # CNN v5b (novos — só dispara se nenhum codigo do mesmo trigger ja virou diag)
+        ({"STE"},
+         "sca_com_supra",
+         "Sugestivo de síndrome coronariana aguda com supra de ST"),
+        ({"MI"},
+         "infarto_miocardio",
+         "Sinais sugestivos de infarto do miocárdio (onda Q patológica / alterações isquêmicas)"),
+        ({"AF"},
+         "fibrilacao_atrial",
+         "Compatível com fibrilação atrial"),
+        ({"AFL"},
+         "flutter_atrial",
+         "Compatível com flutter atrial"),
+        ({"3AVB"},
+         "bav_total",
+         "Sugestivo de bloqueio atrioventricular total (3º grau)"),
+        ({"2AVB"},
+         "bav_segundo_grau",
+         "Sugestivo de bloqueio atrioventricular de 2º grau"),
+        ({"RBBB"},
+         "bloqueio_ramo_direito",
+         "Bloqueio de ramo direito"),
+        ({"IRBBB"},
+         "bloqueio_incompleto_ramo_direito",
+         "Bloqueio incompleto de ramo direito"),
+        ({"LBBB"},
+         "bloqueio_ramo_esquerdo",
+         "Bloqueio de ramo esquerdo"),
+        ({"LAFB"},
+         "bloqueio_divisional_anterossuperior",
+         "Bloqueio divisional anterossuperior esquerdo"),
+        ({"1AVB"},
+         "bav_primeiro_grau",
+         "Bloqueio atrioventricular de 1º grau"),
+        ({"WPW"},
+         "wpw",
+         "Compatível com padrão de Wolff-Parkinson-White"),
+        ({"LQT"},
+         "qt_longo",
+         "Intervalo QT prolongado"),
+        ({"LVH"},
+         "hipertrofia_ve",
+         "Sobrecarga ventricular esquerda"),
+        ({"RVH"},
+         "hipertrofia_vd",
+         "Sobrecarga ventricular direita"),
+        ({"STD"},
+         "isquemia_subendocardica",
+         "Infradesnivelamento do segmento ST — sugestivo de isquemia subendocárdica"),
+        ({"TAb"},
+         "alteracao_onda_t",
+         "Alterações inespecíficas da onda T"),
+        ({"PAC"},
+         "extrassistoles_atriais",
+         "Extrassístoles supraventriculares"),
+        ({"PVC"},
+         "extrassistoles_ventriculares",
+         "Extrassístoles ventriculares"),
+        ({"SB"},
+         "bradicardia_sinusal",
+         "Bradicardia sinusal"),
+        ({"STach"},
+         "taquicardia_sinusal",
+         "Taquicardia sinusal"),
+        ({"LAD"},
+         "desvio_eixo_esquerda",
+         "Desvio do eixo elétrico para a esquerda"),
+        ({"RAD"},
+         "desvio_eixo_direita",
+         "Desvio do eixo elétrico para a direita"),
     ]
 
     seen: set[str] = set()
@@ -313,9 +414,17 @@ def _build_diagnoses_section(diagnoses: list[dict]) -> str:
         return ""
 
     # Separar red-flags do resto
-    red = [d for d in diagnoses if d["code"] in RED_FLAG_CODES
-           or any(d["code"].startswith(r) for r in
-                  ("sca_", "tv_", "bav_total", "hipercalemia_grave", "tamponamento"))]
+    red = [
+        d for d in diagnoses
+        if d["code"] in RED_FLAG_CODES
+        or d.get("code", "") in (
+            "sca_com_supra", "infarto_miocardio", "bav_total", "qt_longo",
+        )
+        or any(
+            d["code"].startswith(r)
+            for r in ("sca_", "tv_", "bav_total", "hipercalemia_grave", "tamponamento")
+        )
+    ]
     normal = [d for d in diagnoses if d not in red]
 
     lines = ["HIPOTESES DIAGNOSTICAS:"]
@@ -431,6 +540,52 @@ _DIAGNOSIS_SEVERITY: dict[str, str] = {
     "TACHYCARDIA": "low", "BRADYCARDIA": "low",
     "SEVERE_SINUS_BRADYCARDIA": "moderate",
     "LEFT_AXIS_DEVIATION": "low", "RIGHT_AXIS_DEVIATION": "low",
+    # CNN v5b
+    "STE": "critical",
+    "3AVB": "critical",
+    "MI": "critical",
+    "2AVB": "moderate",
+    "WPW": "moderate",
+    "LQT": "moderate",
+    "AF": "moderate",
+    "AFL": "moderate",
+    "RBBB": "moderate",
+    "LBBB": "moderate",
+    "IRBBB": "low",
+    "LAFB": "low",
+    "1AVB": "moderate",
+    "LVH": "moderate",
+    "RVH": "moderate",
+    "STD": "moderate",
+    "TAb": "low",
+    "PAC": "low",
+    "PVC": "low",
+    "SB": "low",
+    "STach": "low",
+    "LAD": "low",
+    "RAD": "low",
+    "NORM": "normal",
+    # Diagnoses derivados (saída de _derive_diagnoses)
+    "sca_com_supra": "critical",
+    "infarto_miocardio": "critical",
+    "bav_total": "critical",
+    "bav_segundo_grau": "moderate",
+    "qt_longo": "moderate",
+    "isquemia_subendocardica": "moderate",
+    "hipertrofia_ve": "moderate",
+    "hipertrofia_vd": "moderate",
+    "bloqueio_ramo_direito": "moderate",
+    "bloqueio_ramo_esquerdo": "moderate",
+    "bloqueio_incompleto_ramo_direito": "low",
+    "bloqueio_divisional_anterossuperior": "low",
+    "bav_primeiro_grau": "moderate",
+    "bradicardia_sinusal": "low",
+    "taquicardia_sinusal": "low",
+    "alteracao_onda_t": "low",
+    "extrassistoles_atriais": "low",
+    "extrassistoles_ventriculares": "low",
+    "desvio_eixo_esquerda": "low",
+    "desvio_eixo_direita": "low",
 }
 
 
@@ -471,6 +626,19 @@ def _detect_red_flags(measurements: dict, findings: list[dict]) -> list[str]:
             flags.append("Tamponamento cardíaco")
         if code in ("tv_mono", "tv_poli", "torsades"):
             flags.append(code.upper())
+        # CNN v5b — red flags por código direto
+        if code == "STE":
+            flags.append("Supra de ST detectado pela IA (possível SCA)")
+        if code == "3AVB":
+            flags.append("BAV total (3º grau)")
+        if code == "2AVB":
+            flags.append("BAV 2º grau")
+        if code == "MI":
+            flags.append("Sinais de infarto do miocárdio")
+        if code == "WPW":
+            flags.append("Pré-excitação ventricular (WPW)")
+        if code == "LQT":
+            flags.append("QT prolongado (risco de arritmia)")
 
     # FC extrema
     hr = m.get("heart_rate")

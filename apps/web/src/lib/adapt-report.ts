@@ -102,11 +102,16 @@ const ARRHYTHMIA_PATTERNS: Array<{
   },
 ];
 
+/** Pega a melhor string descritiva de um item de laudo, sem assumir shape. */
+function getDescription(item: { description?: string; name?: string }): string {
+  return item.description ?? item.name ?? "";
+}
+
 function detectIschemia(api: ApiEcgReport): IschemiaResult {
   const findingsText = [
-    ...api.findings.map((f) => f.description),
-    ...api.diagnoses.map((d) => d.description),
-    ...api.redFlags.map((r) => r.description),
+    ...api.findings.map(getDescription),
+    ...api.diagnoses.map(getDescription),
+    ...api.redFlags.map(getDescription),
   ]
     .join(" ")
     .toLowerCase();
@@ -123,13 +128,15 @@ function detectIschemia(api: ApiEcgReport): IschemiaResult {
   // tenta extrair primeiro diagnóstico de isquemia da lista de diagnoses
   const ischemiaDiagnosis =
     api.diagnoses.find((d) =>
-      ISCHEMIA_KEYWORDS.some((k) => d.description.toLowerCase().includes(k)),
+      ISCHEMIA_KEYWORDS.some((k) =>
+        getDescription(d).toLowerCase().includes(k),
+      ),
     ) ?? null;
 
   return {
     probability,
     detected,
-    diagnosis: ischemiaDiagnosis?.description ?? null,
+    diagnosis: ischemiaDiagnosis ? getDescription(ischemiaDiagnosis) : null,
     wall: null,
     leads: null,
     artery: null,
@@ -139,8 +146,8 @@ function detectIschemia(api: ApiEcgReport): IschemiaResult {
 function detectArrhythmia(api: ApiEcgReport): ArrhythmiaResult {
   const text = [
     api.measurements.rhythm ?? "",
-    ...api.findings.map((f) => f.description),
-    ...api.diagnoses.map((d) => d.description),
+    ...api.findings.map(getDescription),
+    ...api.diagnoses.map(getDescription),
   ]
     .join(" ")
     .toLowerCase();
@@ -148,8 +155,8 @@ function detectArrhythmia(api: ApiEcgReport): ArrhythmiaResult {
   for (const p of ARRHYTHMIA_PATTERNS) {
     if (p.re.test(text)) {
       const characteristics = api.findings
-        .filter((f) => p.re.test(f.description.toLowerCase()))
-        .map((f) => f.description);
+        .filter((f) => p.re.test(getDescription(f).toLowerCase()))
+        .map(getDescription);
       return {
         detected: true,
         name: p.name,
@@ -175,7 +182,7 @@ function adaptRedFlags(api: ApiEcgReport): RedFlag[] {
   return api.redFlags.map((rf) => ({
     type: "danger" as const,
     title: "ALERTA",
-    message: rf.description,
+    message: getDescription(rf),
     suggestion: rf.leads_affected?.length
       ? `Derivações: ${rf.leads_affected.join(", ")}`
       : "Correlacionar com dados clínicos.",

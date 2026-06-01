@@ -2,7 +2,7 @@
 Modal function principal -- ProECG
 
 Pipeline (Motor 1):
-  1. pipeline_completo_v1.run_pipeline(img_path, temp_dir)
+  1. pipeline_completo_v2.run_pipeline(img_path, temp_dir, save_plots=False)
        -> ecg_13_leads_mv.npy shape (13, 4096) @ 400Hz
   2. measure_ecg(signal[:12], fs=400)
        -> medições (FC, eixo, PR, QRS, QT, QTc, st_segment, etc.)
@@ -45,7 +45,7 @@ ecg_image = (
         "neurokit2>=0.2,<1",
         "scikit-image>=0.21,<1",  # vendor SignalExtractor
         "PyYAML>=6.0,<7",         # vendor LeadIdentifier (layouts)
-        "matplotlib>=3.7,<4",     # pipeline_completo_v1 plots
+        "matplotlib>=3.7,<4",     # pipeline_completo (save_plots=True só)
         "easyocr>=1.7,<2",        # OCR de calibração (vel/ganho)
         # Web / Claude
         "fastapi[standard]",
@@ -86,7 +86,7 @@ app = modal.App("proecg-ecg-analyzer", image=ecg_image)
 
 @app.cls(
     gpu="T4",
-    timeout=300,           # 5 min — pipeline completo na 1ª chamada pode passar de 60s
+    timeout=600,           # 10 min — margem ampla pra cold start (Dotter + Stenhede + OCR)
     memory=4096,           # 4 GB (Dotter + Stenhede + LeadID + CNN + EasyOCR)
     secrets=[
         modal.Secret.from_name("anthropic-secret"),
@@ -186,11 +186,11 @@ class ECGAnalyzer:
             image.save(str(img_path), "JPEG", quality=95)
             out_dir = temp_dir / "output"
 
-            # --- 2. Roda pipeline_completo_v1 (digitalização end-to-end) ---
-            from pipeline.pipeline_completo_v1 import run_pipeline
-            rc = run_pipeline(img_path, out_dir)
+            # --- 2. Roda pipeline_completo_v2 (digitalização end-to-end, sem plots) ---
+            from pipeline.pipeline_completo_v2 import run_pipeline
+            rc = run_pipeline(img_path, out_dir, save_plots=False)
             if rc != 0:
-                raise RuntimeError(f"pipeline_completo_v1 retornou exit={rc}")
+                raise RuntimeError(f"pipeline_completo_v2 retornou exit={rc}")
 
             # --- 3. Carrega sinal digitalizado (13, 4096) @ 400Hz ---
             npy_13 = out_dir / "ecg_13_leads_mv.npy"
@@ -209,10 +209,10 @@ class ECGAnalyzer:
                 has_rhythm = False
             else:
                 raise FileNotFoundError(
-                    "pipeline_completo_v1 não gerou nenhum ecg_*_leads_mv.npy",
+                    "pipeline_completo_v2 não gerou nenhum ecg_*_leads_mv.npy",
                 )
 
-            fs = 400  # pipeline_completo_v1 reamostra para 400Hz
+            fs = 400  # pipeline_completo_v2 reamostra para 400Hz
 
             # --- 4. Medições (só os 12 leads, sem rhythm strip) ---
             from pipeline.measure import measure_ecg
@@ -273,7 +273,19 @@ class ECGAnalyzer:
                     "st_segment": measurements.get("st_segment", {}),
                 },
                 "findings": _strip_scores(front.get("_findings_raw", [])),
-                "diagnoses": front.get("diagnoses", []),
+                # Frontend (packages/api/src/lib/modal.ts) espera "description";
+                # generate_frontend_report emite "name". Mapeia aqui pra manter
+                # o contrato e evitar TypeError no adapt-report.ts.
+                "diagnoses": [
+                    {
+                        "code": d.get("code", ""),
+                        "description": d.get("name") or d.get("description", ""),
+                        "source": d.get("source", "rules"),
+                        "severity": d.get("severity"),
+                        "confidence": d.get("confidence"),
+                    }
+                    for d in front.get("diagnoses", [])
+                ],
                 # red_flags em formato de objeto (frontend espera .description)
                 "red_flags": [
                     {
@@ -297,7 +309,7 @@ class ECGAnalyzer:
                     "cnn_available": self.cnn_available,
                     "digitizer_sampling_rate": fs,
                     "output_sampling_rate": fs,
-                    "pipeline_version": "pipeline_completo_v1+v5b",
+                    "pipeline_version": "pipeline_completo_v2+v5b",
                 },
                 "processing_time_ms": elapsed_ms,
             }
@@ -361,7 +373,7 @@ def _error_response(error: str, engine: str, elapsed_ms: int) -> dict:
 
 @app.function(
     gpu="T4",
-    timeout=300,
+    timeout=600,
     memory=4096,
     secrets=[
         modal.Secret.from_name("anthropic-secret"),
@@ -422,6 +434,6 @@ def health() -> dict:
     return {
         "status": "ok",
         "service": "proecg-ecg-analyzer",
-        "version": "2.0",
-        "pipeline": "pipeline_completo_v1 + classify v5b",
+        "version": "2.1",
+        "pipeline": "pipeline_completo_v2 + classify v5b",
     }

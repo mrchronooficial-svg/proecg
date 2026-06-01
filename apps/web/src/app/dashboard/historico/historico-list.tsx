@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FileX2 } from "lucide-react";
+import { useMemo } from "react";
 
 import { EcgListItem } from "@/components/dashboard/EcgListItem";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { Skeleton } from "@/components/dashboard/Skeleton";
-import { mockExams } from "@/lib/mock-data";
-import type { EcgAnalysisSummary } from "@/types/dashboard";
+import { toSummary } from "@/lib/summary-from-report";
+import { trpc } from "@/utils/trpc";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 function HistoricoSkeletonRow() {
   return (
@@ -24,25 +25,17 @@ function HistoricoSkeletonRow() {
   );
 }
 
-interface HistoricoListProps {
-  initialExams?: EcgAnalysisSummary[];
-}
+export function HistoricoList() {
+  const { data, isLoading } = useQuery(
+    trpc.ecg.listAnalyses.queryOptions({ limit: PAGE_SIZE }),
+  );
 
-export function HistoricoList({
-  initialExams = mockExams,
-}: HistoricoListProps) {
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<EcgAnalysisSummary[]>([]);
+  const items = useMemo(
+    () => (data?.items ?? []).map(toSummary),
+    [data],
+  );
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setItems(initialExams.slice(0, PAGE_SIZE));
-      setLoading(false);
-    }, 350);
-    return () => window.clearTimeout(t);
-  }, [initialExams]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-3">
         {Array.from({ length: 5 }).map((_, i) => (

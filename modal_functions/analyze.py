@@ -47,6 +47,7 @@ ecg_image = (
         "PyYAML>=6.0,<7",         # vendor LeadIdentifier (layouts)
         "matplotlib>=3.7,<4",     # pipeline_completo (save_plots=True só)
         "easyocr>=1.7,<2",        # OCR de calibração (vel/ganho)
+        "pillow-heif>=0.10,<1",   # iPhone fotografa em HEIC por default
         # Web / Claude
         "fastapi[standard]",
         "anthropic>=0.40.0",
@@ -106,6 +107,15 @@ class ECGAnalyzer:
         """
         import sys
         sys.path.insert(0, "/root")
+
+        # Habilita PIL.Image.open() pra abrir HEIC (iPhone default).
+        # Sem isso, fotos do iPhone caem em UnidentifiedImageError.
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+            print("[OK] HEIC opener registrado em PIL.")
+        except Exception as e:
+            print(f"[WARN] pillow_heif indisponível: {e}")
 
         # CNN v5b (27 MB)
         try:

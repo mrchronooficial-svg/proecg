@@ -505,19 +505,25 @@ class ECGDigitizer:
 
         device = next(self._dotter_model.parameters()).device
 
+        BATCH_SIZE = 32
         with torch.no_grad():
-            for patch_bgr, ox, oy in patches:
-                # BGR → RGB, HWC → CHW, normalizar [0,1]
-                patch_rgb = cv2.cvtColor(patch_bgr, cv2.COLOR_BGR2RGB)
-                tensor = torch.from_numpy(patch_rgb).permute(2, 0, 1).float() / 255.0
-                tensor = tensor.unsqueeze(0).to(device)
-
-                logits = self._dotter_model(tensor)  # (1, 1, 256, 256)
-                prob = torch.sigmoid(logits).squeeze().cpu().numpy()
-
-                ph, pw = prob.shape
-                accum[oy:oy + ph, ox:ox + pw] += prob
-                count[oy:oy + ph, ox:ox + pw] += 1.0
+            for i in range(0, len(patches), BATCH_SIZE):
+                batch = patches[i:i + BATCH_SIZE]
+                tensors: list[torch.Tensor] = []
+                for patch_bgr, _ox, _oy in batch:
+                    # BGR → RGB, HWC → CHW, normalizar [0,1]
+                    patch_rgb = cv2.cvtColor(patch_bgr, cv2.COLOR_BGR2RGB)
+                    tensors.append(
+                        torch.from_numpy(patch_rgb).permute(2, 0, 1).float() / 255.0
+                    )
+                stack = torch.stack(tensors).to(device)        # (B, 3, 256, 256)
+                logits = self._dotter_model(stack)             # (B, 1, 256, 256)
+                probs = torch.sigmoid(logits).cpu().numpy()    # (B, 1, 256, 256)
+                for j, (_patch, ox, oy) in enumerate(batch):
+                    prob = probs[j, 0]
+                    ph, pw = prob.shape
+                    accum[oy:oy + ph, ox:ox + pw] += prob
+                    count[oy:oy + ph, ox:ox + pw] += 1.0
 
         count = np.maximum(count, 1.0)
         prob_map = accum / count
@@ -1239,7 +1245,12 @@ class ECGDigitizer:
             try:
                 # PT+EN: cabeçalhos de ECG brasileiros (Ritmo, Frequência, Padrão...)
                 # frequentemente aparecem antes dos labels de derivações.
-                self._ocr_reader = easyocr.Reader(["pt", "en"], gpu=False, verbose=False)
+                import torch
+                use_gpu = bool(torch.cuda.is_available())
+                self._ocr_reader = easyocr.Reader(
+                    ["pt", "en"], gpu=use_gpu, verbose=False,
+                )
+                logger.info("Orientação: EasyOCR em %s", "GPU" if use_gpu else "CPU")
             except Exception as e:
                 logger.warning("Orientação: falha ao carregar EasyOCR (%s) — sem correção", e)
                 return img

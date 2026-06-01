@@ -1,11 +1,14 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import type { Route } from "next";
+import { useMemo } from "react";
 
 import { NewEcgButton } from "@/components/dashboard/NewEcgButton";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { mockExams, mockStats } from "@/lib/mock-data";
+import { toSummary } from "@/lib/summary-from-report";
+import { trpc } from "@/utils/trpc";
 
 interface DashboardHomeProps {
   userName: string;
@@ -64,8 +67,30 @@ export default function DashboardHome({ userName }: DashboardHomeProps) {
   const now = new Date();
   const greeting = greetingFor(now);
   const dateLabel = capitalize(longDateFormatter.format(now));
-  const lastExamRel = relativeFromNow(mockStats.lastExamAt);
-  const lastExam = mockExams[0];
+
+  const { data } = useQuery(
+    trpc.ecg.listAnalyses.queryOptions({ limit: 50 }),
+  );
+
+  const { totalExams, thisMonth, lastExam, lastExamAt } = useMemo(() => {
+    const items = data?.items ?? [];
+    const summaries = items.map(toSummary);
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const thisMonthCount = summaries.filter(
+      (s) => s.createdAt >= startOfMonth,
+    ).length;
+    const last = summaries[0] ?? null;
+    return {
+      totalExams: summaries.length,
+      thisMonth: thisMonthCount,
+      lastExam: last,
+      lastExamAt: last?.createdAt ?? null,
+    };
+  }, [data]);
+
+  const lastExamRel = relativeFromNow(lastExamAt);
 
   return (
     <div className="flex flex-col gap-8">
@@ -82,16 +107,8 @@ export default function DashboardHome({ userName }: DashboardHomeProps) {
         aria-label="Estatísticas"
         className="grid grid-cols-2 gap-3 md:grid-cols-3"
       >
-        <StatCard
-          value={mockStats.totalExams}
-          label="Exames"
-          delayMs={50}
-        />
-        <StatCard
-          value={mockStats.thisMonth}
-          label="Este mês"
-          delayMs={120}
-        />
+        <StatCard value={totalExams} label="Exames" delayMs={50} />
+        <StatCard value={thisMonth} label="Este mês" delayMs={120} />
         <StatCard
           value={lastExamRel ?? "—"}
           label="Último"
@@ -121,7 +138,7 @@ export default function DashboardHome({ userName }: DashboardHomeProps) {
               {dateTimeFormatter.format(lastExam.createdAt).replace(",", " ·")}
             </div>
             <p className="mt-2 line-clamp-2 text-[17px] leading-[1.47] text-apple-text">
-              {lastExam.reportSummary}
+              {lastExam.reportSummary ?? "Laudo disponível"}
             </p>
             <div className="mt-3 inline-flex items-center gap-1 text-[15px] font-medium text-apple-accent">
               Ver laudo completo

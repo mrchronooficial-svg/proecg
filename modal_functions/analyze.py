@@ -57,6 +57,9 @@ ecg_image = (
     .run_commands(
         "python -c \"import easyocr; easyocr.Reader(['pt','en'], gpu=False, download_enabled=True)\"",
     )
+    # Reduz fragmentação de memória CUDA — em T4 (16GB) Dotter + Stenhede +
+    # LeadIdentifier + CNN v5b acabavam estourando sem isso.
+    .env({"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
     # Código do pipeline numérico
     .add_local_dir("pipeline", remote_path="/root/pipeline")
     # Pesos dos modelos (Dotter, Leader, CNN v5b)

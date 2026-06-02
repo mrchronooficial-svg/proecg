@@ -641,6 +641,10 @@ def run_pipeline(
 
     grid_prob = _to_np(grid_p); text_prob = _to_np(text_p)
     signal_prob = _to_np(signal_p); bg_prob = _to_np(bg_p)
+    # Libera o forward gigante do Stenhede da VRAM antes das próximas etapas.
+    del logits, probs, grid_p, text_p, signal_p, bg_p, tensor
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     if save_plots:
         save_channel_heatmap(grid_prob, "Blues", "Canal 0: GRID",
@@ -708,6 +712,10 @@ def run_pipeline(
         logger.warning("Esperava 4 bandas, achei %d", len(bands))
 
     # ----- 11. Detecção de formato (bandas + LeadIdentifier) -----
+    # LeadIdentifier UNet aloca ~3-4GB de feature map em imagens grandes;
+    # libera VRAM cacheada de Stenhede/Dotter pra evitar OOM em T4 16GB.
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     logger.info("[11] Detecção dinâmica de formato...")
     bandas_info = detector_bandas(binary, bands)
     li_info = detector_lead_identifier_full(signal_prob, grid_prob, text_prob)

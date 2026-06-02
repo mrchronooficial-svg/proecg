@@ -62,34 +62,18 @@ CLASS_DESCRIPTIONS: dict[str, str] = {
     "MI":    "Sinais de infarto do miocárdio",
 }
 
-# Thresholds Youden otimizados por classe (maximiza sens + espec)
-# Calculados no test set de 23.817 ECGs
-YOUDEN_THRESHOLDS: dict[str, float] = {
-    "NORM":  0.766,
-    "AF":    0.020,
-    "AFL":   0.226,
-    "1AVB":  0.044,
-    "2AVB":  0.002,
-    "3AVB":  0.037,
-    "RBBB":  0.104,
-    "IRBBB": 0.055,
-    "LBBB":  0.031,
-    "LAFB":  0.043,
-    "SB":    0.163,
-    "STach": 0.022,
-    "PAC":   0.020,
-    "PVC":   0.075,
-    "LVH":   0.013,
-    "RVH":   0.002,
-    "WPW":   0.008,
-    "STE":   0.028,
-    "STD":   0.041,
-    "TAb":   0.140,
-    "LQT":   0.007,
-    "LAD":   0.049,
-    "RAD":   0.040,
-    "MI":    0.024,
-}
+# Thresholds: 0.25 fixo para todas as 24 classes (override do Youden).
+# Os valores Youden originais (otimizados sens+espec no test set de 23.817 ECGs)
+# ficam abaixo como comentário pra facilitar revert.
+#
+# YOUDEN_ORIG = {
+#   "NORM":0.766, "AF":0.020,  "AFL":0.226,  "1AVB":0.044, "2AVB":0.002,
+#   "3AVB":0.037, "RBBB":0.104, "IRBBB":0.055,"LBBB":0.031, "LAFB":0.043,
+#   "SB":0.163,   "STach":0.022,"PAC":0.020,  "PVC":0.075,  "LVH":0.013,
+#   "RVH":0.002,  "WPW":0.008,  "STE":0.028,  "STD":0.041,  "TAb":0.140,
+#   "LQT":0.007,  "LAD":0.049,  "RAD":0.040,  "MI":0.024,
+# }
+YOUDEN_THRESHOLDS: dict[str, float] = {name: 0.25 for name in CLASS_NAMES}
 
 # Red flags: diagnósticos que requerem atenção imediata
 RED_FLAG_CODES = {"STE", "3AVB", "2AVB", "WPW", "LQT", "MI"}
